@@ -9,46 +9,48 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
 
-  // Student Password Change State
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [passChangeStatus, setPassChangeStatus] = useState({ type: '', msg: '' });
+  // Director View Switcher
+  const [viewAsStudentMode, setViewAsStudentMode] = useState(false);
 
-  // FVA Practice Hub State
-  const [fvaTerms, setFvaTerms] = useState([]);
-  const [termIndex, setTermIndex] = useState(0);
-  const [showAnswer, setShowAnswer] = useState(false);
+  // Audio Instrument Selector & Octave State
+  const [audioInstrument, setAudioInstrument] = useState('pitch_pipe'); // 'pitch_pipe' or 'piano'
+  const [octaveOffset, setOctaveOffset] = useState(0); // -2, -1, 0, +1, +2
+  const [activePitch, setActivePitch] = useState(null);
 
-  // Metronome & Pitch Pipe Audio Engine
+  // Metronome State
   const [bpm, setBpm] = useState(100);
   const [isPlayingMetronome, setIsPlayingMetronome] = useState(false);
-  const [activePitch, setActivePitch] = useState(null);
   const audioCtxRef = useRef(null);
   const metronomeTimerRef = useRef(null);
 
-  // Director Master Roster & Riser Layout State
+  // Roster & Riser State
   const [students, setStudents] = useState([]);
   const [ensembles, setEnsembles] = useState([]);
   const [filterEnsemble, setFilterEnsemble] = useState('All');
-  const [newEnsembleName, setNewEnsembleName] = useState('');
   const [editingStudent, setEditingStudent] = useState(null);
   const [overflowEnabled, setOverflowEnabled] = useState(false);
 
-  // CSV Staging Area State
-  const [csvRawText, setCsvRawText] = useState('');
-  const [stagedStudents, setStagedStudents] = useState([]);
-  const [isImportingCsv, setIsImportingCsv] = useState(false);
+  // Uniform Tracking State
+  const [studentUniforms, setStudentUniforms] = useState({
+    uniform_tshirt: false,
+    uniform_tshirt_size: 'M',
+    uniform_polo: false,
+    uniform_polo_size: 'M',
+    uniform_dress: false,
+    uniform_jacket: false,
+    uniform_silver_tie: false,
+    uniform_teal_tie: false,
+    uniform_red_tie: false,
+    uniform_white_tie: false,
+    uniform_backpack: false,
+    uniform_other: '',
+    uniform_other_checked: false
+  });
 
-  // Height State for New Student Entry (Feet & Inches)
-  const [inputFeet, setInputFeet] = useState(5);
-  const [inputInches, setInputInches] = useState(5);
-
+  const sizes = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
   const baseRisers = ['Riser A', 'Riser B', 'Riser C', 'Riser D', 'Riser E', 'Riser F'];
   const activeRisers = overflowEnabled ? [...baseRisers, 'Riser G'] : baseRisers;
-
-  const baseRows = ['Row 4', 'Row 3', 'Row 2', 'Row 1'];
-  const activeRows = overflowEnabled ? ['Row 4', 'Row 3', 'Row 2', 'Row 1', 'Ground'] : baseRows;
-
+  const activeRows = overflowEnabled ? ['Row 4', 'Row 3', 'Row 2', 'Row 1', 'Ground'] : ['Row 4', 'Row 3', 'Row 2', 'Row 1'];
   const slots = ['Far Left', 'Center Left', 'Center Right', 'Far Right'];
   const voiceParts = ['Soprano 1', 'Soprano 2', 'Alto 1', 'Alto 2', 'Tenor 1', 'Tenor 2', 'Bass 1', 'Bass 2'];
 
@@ -59,43 +61,70 @@ export default function App() {
     { date: 'Nov 3, 2026', title: 'OCPS All-County Audition Prep', location: 'Chorus Room' }
   ];
 
+  // Octave 4 Base Frequencies
   const pitchPipePitches = [
-    { note: 'C4', freq: 261.63 },
-    { note: 'C#4', freq: 277.18 },
-    { note: 'D4', freq: 293.66 },
-    { note: 'D#4', freq: 311.13 },
-    { note: 'E4', freq: 329.63 },
-    { note: 'F4', freq: 349.23 },
-    { note: 'F#4', freq: 369.99 },
-    { note: 'G4', freq: 392.00 },
-    { note: 'G#4', freq: 415.30 },
-    { note: 'A4', freq: 440.00 },
-    { note: 'A#4', freq: 466.16 },
-    { note: 'B4', freq: 493.88 }
+    { note: 'C', label: 'C', freq: 261.63 },
+    { note: 'C#', label: 'C#/Db', freq: 277.18 },
+    { note: 'D', label: 'D', freq: 293.66 },
+    { note: 'D#', label: 'D#/Eb', freq: 311.13 },
+    { note: 'E', label: 'E', freq: 329.63 },
+    { note: 'F', label: 'F', freq: 349.23 },
+    { note: 'F#', label: 'F#/Gb', freq: 369.99 },
+    { note: 'G', label: 'G', freq: 392.00 },
+    { note: 'G#', label: 'G#/Ab', freq: 415.30 },
+    { note: 'A', label: 'A', freq: 440.00 },
+    { note: 'A#', label: 'A#/Bb', freq: 466.16 },
+    { note: 'B', label: 'B', freq: 493.88 }
   ];
 
-  const [newStudent, setNewStudent] = useState({
-    student_id: '',
-    first_name: '',
-    last_name: '',
-    ensemble: '',
-    additional_ensembles: '',
-    voice_part: 'Soprano 1',
-    height_inches: 65,
-    wenger_section: 'Riser A',
-    wenger_row: 'Row 1',
-    wenger_slot: 'Far Left'
-  });
+  // Piano Keys (B3 to C5)
+  const pianoKeys = [
+    { note: 'B3', label: 'B3', isBlack: false, freq: 246.94 },
+    { note: 'C4', label: 'C4', isBlack: false, freq: 261.63 },
+    { note: 'C#4', label: 'C#/Db', isBlack: true, freq: 277.18 },
+    { note: 'D4', label: 'D4', isBlack: false, freq: 293.66 },
+    { note: 'D#4', label: 'D#/Eb', isBlack: true, freq: 311.13 },
+    { note: 'E4', label: 'E4', isBlack: false, freq: 329.63 },
+    { note: 'F4', label: 'F4', isBlack: false, freq: 349.23 },
+    { note: 'F#4', label: 'F#/Gb', isBlack: true, freq: 369.99 },
+    { note: 'G4', label: 'G4', isBlack: false, freq: 392.00 },
+    { note: 'G#4', label: 'G#/Ab', isBlack: true, freq: 415.30 },
+    { note: 'A4', label: 'A4', isBlack: false, freq: 440.00 },
+    { note: 'A#4', label: 'A#/Bb', isBlack: true, freq: 466.16 },
+    { note: 'B4', label: 'B4', isBlack: false, freq: 493.88 },
+    { note: 'C5', label: 'C5', isBlack: false, freq: 523.25 }
+  ];
 
   useEffect(() => {
     if (currentUser) {
       fetchEnsembles();
-      if (currentUser.role === 'director') {
-        fetchStudents();
-      }
+      fetchStudents();
       fetchFvaTerms();
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser && students.length > 0) {
+      const match = students.find(s => s.student_id === currentUser.student_id);
+      if (match) {
+        setStudentUniforms({
+          uniform_tshirt: match.uniform_tshirt || false,
+          uniform_tshirt_size: match.uniform_tshirt_size || 'M',
+          uniform_polo: match.uniform_polo || false,
+          uniform_polo_size: match.uniform_polo_size || 'M',
+          uniform_dress: match.uniform_dress || false,
+          uniform_jacket: match.uniform_jacket || false,
+          uniform_silver_tie: match.uniform_silver_tie || false,
+          uniform_teal_tie: match.uniform_teal_tie || false,
+          uniform_red_tie: match.uniform_red_tie || false,
+          uniform_white_tie: match.uniform_white_tie || false,
+          uniform_backpack: match.uniform_backpack || false,
+          uniform_other: match.uniform_other || '',
+          uniform_other_checked: match.uniform_other_checked || false
+        });
+      }
+    }
+  }, [currentUser, students]);
 
   const getAudioContext = () => {
     if (!audioCtxRef.current) {
@@ -107,16 +136,19 @@ export default function App() {
     return audioCtxRef.current;
   };
 
-  const playPitch = (freq, note) => {
+  const playFrequency = (baseFreq, noteName) => {
     try {
       const ctx = getAudioContext();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      // Apply Octave Offset: 2^(octaveOffset)
+      const adjustedFreq = baseFreq * Math.pow(2, octaveOffset);
 
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      osc.type = audioInstrument === 'piano' ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(adjustedFreq, ctx.currentTime);
+
+      gain.gain.setValueAtTime(0.35, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.8);
 
       osc.connect(gain);
@@ -124,11 +156,11 @@ export default function App() {
 
       osc.start();
       osc.stop(ctx.currentTime + 1.8);
-      setActivePitch(note);
+      setActivePitch(noteName);
 
       setTimeout(() => setActivePitch(null), 1800);
     } catch (e) {
-      console.error('Pitch Pipe Audio Error:', e);
+      console.error('Audio Synth Error:', e);
     }
   };
 
@@ -157,39 +189,11 @@ export default function App() {
           osc.start();
           osc.stop(ctx.currentTime + 0.05);
         } catch (e) {
-          console.error('Metronome Audio Error:', e);
+          console.error('Metronome Error:', e);
         }
       }, interval);
     }
   };
-
-  useEffect(() => {
-    if (isPlayingMetronome) {
-      clearInterval(metronomeTimerRef.current);
-      const interval = (60 / bpm) * 1000;
-      metronomeTimerRef.current = setInterval(() => {
-        try {
-          const ctx = getAudioContext();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-
-          osc.type = 'square';
-          osc.frequency.setValueAtTime(800, ctx.currentTime);
-
-          gain.gain.setValueAtTime(0.2, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-
-          osc.start();
-          osc.stop(ctx.currentTime + 0.05);
-        } catch (e) {
-          console.error('Metronome Audio Error:', e);
-        }
-      }, interval);
-    }
-  }, [bpm]);
 
   const fetchEnsembles = async () => {
     try {
@@ -197,9 +201,6 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setEnsembles(data);
-        if (data.length > 0 && !newStudent.ensemble) {
-          setNewStudent(prev => ({ ...prev, ensemble: data[0] }));
-        }
       }
     } catch (e) {
       console.error('Error fetching ensembles:', e);
@@ -251,175 +252,20 @@ export default function App() {
     }
   };
 
-  const handleParseCsv = (e) => {
-    e.preventDefault();
-    if (!csvRawText.trim()) return;
-
-    const lines = csvRawText.trim().split('\n');
-    const parsed = [];
-
-    lines.forEach((line, idx) => {
-      if (idx === 0 && (line.toLowerCase().includes('id') || line.toLowerCase().includes('first'))) {
-        return;
-      }
-      const cols = line.split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
-      if (cols.length >= 3) {
-        parsed.push({
-          student_id: cols[0],
-          first_name: cols[1],
-          last_name: cols[2],
-          ensemble: ensembles[0] || 'Concert Chorus',
-          voice_part: 'Soprano 1',
-          height_inches: 65,
-          wenger_section: 'Riser A',
-          wenger_row: 'Row 1',
-          wenger_slot: 'Far Left'
-        });
-      }
-    });
-
-    if (parsed.length > 0) {
-      setStagedStudents(parsed);
-    } else {
-      alert('Could not parse CSV. Ensure formatting is: Student_ID, First_Name, Last_Name');
-    }
-  };
-
-  const handleCommitBulkImport = async () => {
-    if (stagedStudents.length === 0) return;
+  const handleSaveUniformChecklist = async (updatedState) => {
+    setStudentUniforms(updatedState);
     try {
-      const res = await fetch(`${API_BASE}/students/bulk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(stagedStudents)
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(data.message);
-        setStagedStudents([]);
-        setCsvRawText('');
-        setIsImportingCsv(false);
-        fetchStudents();
-      }
-    } catch (err) {
-      alert('Failed to import bulk students.');
-    }
-  };
-
-  const handleAddEnsemble = async (e) => {
-    e.preventDefault();
-    if (!newEnsembleName.trim()) return;
-    try {
-      const res = await fetch(`${API_BASE}/ensembles`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newEnsembleName.trim() })
-      });
-      if (res.ok) {
-        setNewEnsembleName('');
-        fetchEnsembles();
-      }
-    } catch (err) {
-      alert('Failed to add ensemble.');
-    }
-  };
-
-  const handleRenameEnsemble = async (oldName) => {
-    const newName = window.prompt(`Rename ensemble "${oldName}" to:`, oldName);
-    if (!newName || newName === oldName) return;
-    try {
-      const res = await fetch(`${API_BASE}/ensembles/rename`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ old_name: oldName, new_name: newName.trim() })
-      });
-      if (res.ok) {
-        fetchEnsembles();
-        fetchStudents();
-      }
-    } catch (err) {
-      alert('Failed to rename ensemble.');
-    }
-  };
-
-  const handleAddStudent = async (e) => {
-    e.preventDefault();
-    const calculatedInches = (Number(inputFeet) * 12) + Number(inputInches);
-    const payload = {
-      ...newStudent,
-      height_inches: calculatedInches
-    };
-
-    try {
-      const res = await fetch(`${API_BASE}/students`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        fetchStudents();
-        setNewStudent({
-          student_id: '',
-          first_name: '',
-          last_name: '',
-          ensemble: ensembles[0] || '',
-          additional_ensembles: '',
-          voice_part: 'Soprano 1',
-          height_inches: 65,
-          wenger_section: 'Riser A',
-          wenger_row: 'Row 1',
-          wenger_slot: 'Far Left'
-        });
-      }
-    } catch (err) {
-      alert('Failed to add student.');
-    }
-  };
-
-  const handleSaveStudentEdit = async () => {
-    if (!editingStudent) return;
-    try {
-      const res = await fetch(`${API_BASE}/students/${editingStudent.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingStudent)
-      });
-      if (res.ok) {
-        setEditingStudent(null);
-        fetchStudents();
-      }
-    } catch (err) {
-      alert('Failed to save student edits.');
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (window.confirm('Delete this student from roster?')) {
-      await fetch(`${API_BASE}/students/${id}`, { method: 'DELETE' });
-      fetchStudents();
-    }
-  };
-
-  const handleDirectorResetPassword = async (studentId, studentName) => {
-    const customPass = window.prompt(
-      `Reset password for ${studentName} (ID: ${studentId}).\nEnter new temporary password (or leave blank for 'titan123'):`,
-      'titan123'
-    );
-    if (customPass === null) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/admin/reset-student-password`, {
+      await fetch(`${API_BASE}/students/uniform`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          student_id: studentId,
-          new_password: customPass.trim() || 'titan123'
+          student_id: currentUser.student_id,
+          ...updatedState
         })
       });
-      const data = await res.json();
-      alert(data.message);
-    } catch (err) {
-      alert('Failed to reset student password.');
+      fetchStudents();
+    } catch (e) {
+      console.error('Error updating uniform:', e);
     }
   };
 
@@ -439,14 +285,12 @@ export default function App() {
                 src="/Olympia Titan Chorus 26 Logo - 3.PNG"
                 alt="Olympia Titan Chorus Crest"
                 className="w-28 h-28 mx-auto rounded-full border-2 border-teal-400 shadow-xl object-cover"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                }}
+                onError={(e) => { e.target.style.display = 'none'; }}
               />
             </a>
             <h1 className="text-2xl font-bold text-teal-400">Olympia High School</h1>
             <h2 className="text-xl font-semibold text-slate-200">Titan Chorus Hub</h2>
-            <p className="text-xs text-slate-400 mt-1">"We Strive to Touch Lives!"</p>
+            <p className="text-xs text-slate-400 mt-1">Director: Cesar Lengua-Miranda</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -488,8 +332,142 @@ export default function App() {
     );
   }
 
-  // DIRECTOR ADMIN DASHBOARD
-  if (currentUser.role === 'director') {
+  const isDirector = currentUser.role === 'director';
+
+  // REHEARSAL AUDIO TOOLBAR WIDGET (Shared between Admin & Student Views)
+  const renderAudioToolbar = () => (
+    <div className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-4 mb-4 border-b border-slate-800 pb-3">
+        <div>
+          <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider">🎹 Rehearsal Pitch & Metronome Tools</h3>
+          <p className="text-xs text-slate-400">Toggle between Pitch Buttons and Piano (B3-C5 with Enharmonics)</p>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setAudioInstrument('pitch_pipe')}
+            className={`px-3 py-1.5 rounded text-xs font-bold transition border ${
+              audioInstrument === 'pitch_pipe'
+                ? 'bg-teal-600 text-white border-teal-400'
+                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+            }`}
+          >
+            🎵 Pitch Pipe
+          </button>
+          <button
+            onClick={() => setAudioInstrument('piano')}
+            className={`px-3 py-1.5 rounded text-xs font-bold transition border ${
+              audioInstrument === 'piano'
+                ? 'bg-teal-600 text-white border-teal-400'
+                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+            }`}
+          >
+            🎹 Piano (B3–C5)
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* METRONOME */}
+        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
+          <div>
+            <h4 className="text-xs font-bold text-teal-300 uppercase mb-2">⏱ Metronome</h4>
+            <div className="text-center my-2">
+              <span className="text-3xl font-extrabold text-white font-mono">{bpm}</span>
+              <span className="text-xs text-slate-400 block">BPM</span>
+            </div>
+            <input
+              type="range"
+              min="40"
+              max="208"
+              value={bpm}
+              onChange={(e) => setBpm(Number(e.target.value))}
+              className="w-full accent-teal-500 cursor-pointer"
+            />
+          </div>
+          <button
+            onClick={toggleMetronome}
+            className={`w-full py-2 rounded font-bold text-xs transition mt-3 ${
+              isPlayingMetronome ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-teal-600 hover:bg-teal-500 text-white'
+            }`}
+          >
+            {isPlayingMetronome ? '⏹ Stop' : '▶ Start'}
+          </button>
+        </div>
+
+        {/* PITCH INSTRUMENT DISPLAY */}
+        <div className="md:col-span-2 bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
+          <div className="flex justify-between items-center mb-3">
+            <h4 className="text-xs font-bold text-teal-300 uppercase">
+              {audioInstrument === 'pitch_pipe' ? '🎵 Chromatic Pitch Pipe' : '🎹 Rehearsal Piano (B3–C5)'}
+            </h4>
+
+            {/* OCTAVE SWITCHER */}
+            <div className="flex items-center space-x-1">
+              <span className="text-[10px] text-slate-400 uppercase mr-1">Octave Shift:</span>
+              {[-2, -1, 0, 1, 2].map((off) => (
+                <button
+                  key={off}
+                  onClick={() => setOctaveOffset(off)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition border ${
+                    octaveOffset === off
+                      ? 'bg-amber-500 text-slate-950 border-white'
+                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                  }`}
+                >
+                  {off === 0 ? 'Std' : off > 0 ? `+${off}` : off}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* INSTRUMENT VIEW 1: PITCH PIPE BUTTON MATRIX */}
+          {audioInstrument === 'pitch_pipe' ? (
+            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+              {pitchPipePitches.map((p) => (
+                <button
+                  key={p.note}
+                  onClick={() => playFrequency(p.freq, p.note)}
+                  className={`py-3 rounded font-mono font-bold text-xs transition border flex flex-col items-center justify-center ${
+                    activePitch === p.note
+                      ? 'bg-teal-500 text-slate-950 border-white scale-105 shadow-lg'
+                      : 'bg-slate-900 text-slate-200 border-slate-800 hover:border-teal-400'
+                  }`}
+                >
+                  <span>{p.note}</span>
+                  <span className="text-[9px] text-teal-300 font-normal">{p.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            /* INSTRUMENT VIEW 2: PIANO KEYS (B3 to C5) WITH ENHARMONIC LABELS */
+            <div className="overflow-x-auto pb-2">
+              <div className="flex justify-center items-start min-w-[500px] h-36 bg-slate-900 p-2 rounded border border-slate-800 relative select-none">
+                {pianoKeys.map((k) => (
+                  <button
+                    key={k.note}
+                    onClick={() => playFrequency(k.freq, k.note)}
+                    className={`flex flex-col justify-end items-center pb-2 transition border rounded-b ${
+                      k.isBlack
+                        ? 'bg-slate-950 text-teal-300 border-slate-800 w-9 h-22 -mx-2 z-10 hover:bg-slate-900'
+                        : 'bg-slate-200 text-slate-950 border-slate-400 w-12 h-32 z-0 hover:bg-white'
+                    } ${activePitch === k.note ? 'ring-2 ring-amber-400 scale-95' : ''}`}
+                  >
+                    <span className="text-[9px] font-bold font-mono text-center leading-tight">
+                      {k.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // DIRECTOR ADMIN DASHBOARD VIEW
+  if (isDirector && !viewAsStudentMode) {
     const filteredRoster = filterEnsemble === 'All'
       ? students
       : students.filter(s => s.ensemble === filterEnsemble || s.additional_ensembles?.includes(filterEnsemble));
@@ -498,243 +476,45 @@ export default function App() {
       <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
         <header className="flex justify-between items-center border-b border-teal-900/60 pb-4 mb-6">
           <div className="flex items-center space-x-3">
-            <a
-              href="https://www.instagram.com/olympiatitanchorus"
-              target="_blank"
-              rel="noreferrer"
-              title="Visit Titan Chorus Instagram @olympiatitanchorus"
-              className="group"
-            >
+            <a href="https://www.instagram.com/olympiatitanchorus" target="_blank" rel="noreferrer" className="group">
               <img
                 src="/Olympia Titan Chorus 26 Logo - 3.PNG"
                 alt="Olympia Titan Chorus Logo"
                 className="w-12 h-12 rounded-full border-2 border-teal-400 shadow-md transform group-hover:scale-105 transition object-cover"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                }}
+                onError={(e) => { e.target.style.display = 'none'; }}
               />
             </a>
             <div>
               <h1 className="text-2xl font-bold text-teal-400">Titan Chorus Admin Portal</h1>
-              <p className="text-xs text-slate-400">Signed in as: {currentUser.name} (Director)</p>
+              <p className="text-xs text-slate-400">Director: {currentUser.name}</p>
             </div>
           </div>
 
-          <button
-            onClick={() => setCurrentUser(null)}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm px-4 py-2 rounded-lg"
-          >
-            Sign Out
-          </button>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setViewAsStudentMode(true)}
+              className="bg-teal-950 border border-teal-400 hover:bg-teal-900 text-teal-300 text-xs font-bold px-3.5 py-2 rounded-lg transition flex items-center space-x-1.5 shadow-md"
+            >
+              <span>👁 Preview Student View</span>
+            </button>
+            <button
+              onClick={() => setCurrentUser(null)}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm px-4 py-2 rounded-lg"
+            >
+              Sign Out
+            </button>
+          </div>
         </header>
 
-        {/* SKYWARD CSV BULK IMPORT MODULE */}
-        <section className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl mb-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-lg font-bold text-teal-400">📊 Skyward / OCPS Bulk CSV Import</h2>
-              <p className="text-xs text-slate-400">Import student demographic lists directly from Skyward or Excel spreadsheets.</p>
-            </div>
-            <button
-              onClick={() => setIsImportingCsv(!isImportingCsv)}
-              className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2 rounded text-sm transition"
-            >
-              {isImportingCsv ? 'Close Importer' : '+ Bulk Upload Skyward CSV'}
-            </button>
-          </div>
-
-          {isImportingCsv && (
-            <div className="mt-4 pt-4 border-t border-slate-800 space-y-4">
-              {stagedStudents.length === 0 ? (
-                <form onSubmit={handleParseCsv} className="space-y-3">
-                  <p className="text-xs text-slate-300">
-                    Paste raw CSV lines below. Expected column format: <code className="text-teal-300 font-mono">Student_ID, First_Name, Last_Name</code>
-                  </p>
-                  <textarea
-                    rows="5"
-                    placeholder="480123456, Sarah, Jenkins&#10;480123457, Emily, Davis"
-                    value={csvRawText}
-                    onChange={(e) => setCsvRawText(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 p-3 rounded font-mono text-xs text-white"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2 rounded text-xs"
-                  >
-                    Parse CSV into Staging Grid →
-                  </button>
-                </form>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-bold text-teal-300">
-                      Review & Assign Staged Records ({stagedStudents.length} Students)
-                    </h3>
-                    <div className="space-x-2">
-                      <button
-                        onClick={() => setStagedStudents([])}
-                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 rounded"
-                      >
-                        Clear Staging
-                      </button>
-                      <button
-                        onClick={handleCommitBulkImport}
-                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white rounded"
-                      >
-                        ✓ Commit All to Live Roster
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="max-h-80 overflow-y-auto border border-slate-800 rounded">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-950 text-slate-400 sticky top-0">
-                        <tr>
-                          <th className="p-2">ID</th>
-                          <th className="p-2">First Name</th>
-                          <th className="p-2">Last Name</th>
-                          <th className="p-2">Assigned Ensemble</th>
-                          <th className="p-2">Voice Part</th>
-                          <th className="p-2">Height (Inches)</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800 text-slate-200">
-                        {stagedStudents.map((stg, idx) => (
-                          <tr key={idx} className="hover:bg-slate-800/40">
-                            <td className="p-2 font-mono text-teal-400">{stg.student_id}</td>
-                            <td className="p-2">{stg.first_name}</td>
-                            <td className="p-2">{stg.last_name}</td>
-                            <td className="p-2">
-                              <select
-                                value={stg.ensemble}
-                                onChange={(e) => {
-                                  const updated = [...stagedStudents];
-                                  updated[idx].ensemble = e.target.value;
-                                  setStagedStudents(updated);
-                                }}
-                                className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white"
-                              >
-                                {ensembles.map(ens => <option key={ens} value={ens}>{ens}</option>)}
-                              </select>
-                            </td>
-                            <td className="p-2">
-                              <select
-                                value={stg.voice_part}
-                                onChange={(e) => {
-                                  const updated = [...stagedStudents];
-                                  updated[idx].voice_part = e.target.value;
-                                  setStagedStudents(updated);
-                                }}
-                                className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white"
-                              >
-                                {voiceParts.map(vp => <option key={vp} value={vp}>{vp}</option>)}
-                              </select>
-                            </td>
-                            <td className="p-2 font-bold text-teal-300">
-                              <input
-                                type="number"
-                                value={stg.height_inches || 65}
-                                onChange={(e) => {
-                                  const updated = [...stagedStudents];
-                                  updated[idx].height_inches = Number(e.target.value);
-                                  setStagedStudents(updated);
-                                }}
-                                className="w-16 bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white"
-                              />
-                              {" "}in.
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* QUICK TOOLS & CALENDAR WIDGET ROW */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          {/* UPCOMING EVENTS */}
-          <div className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider">📅 Upcoming Events (Next 4 Weeks)</h3>
-              <a
-                href="https://calendar.google.com"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[10px] text-slate-400 hover:text-teal-300 underline"
-              >
-                Google Calendar ↗
-              </a>
-            </div>
-            <div className="space-y-2">
-              {upcomingEvents.map((evt, idx) => (
-                <div key={idx} className="bg-slate-950 p-2.5 rounded border border-slate-800 text-xs">
-                  <span className="font-semibold text-teal-300 block">{evt.date}</span>
-                  <p className="text-white font-medium">{evt.title}</p>
-                  <p className="text-[10px] text-slate-500">{evt.location}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* REHEARSAL METRONOME */}
-          <div className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl flex flex-col justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider mb-2">⏱ Instant Rehearsal Metronome</h3>
-              <div className="text-center my-4">
-                <span className="text-4xl font-extrabold text-white font-mono">{bpm}</span>
-                <span className="text-xs text-slate-400 block mt-1">BPM</span>
-              </div>
-              <input
-                type="range"
-                min="40"
-                max="208"
-                value={bpm}
-                onChange={(e) => setBpm(Number(e.target.value))}
-                className="w-full accent-teal-500 cursor-pointer"
-              />
-            </div>
-            <button
-              onClick={toggleMetronome}
-              className={`w-full py-2.5 rounded-lg font-bold text-sm transition mt-4 ${
-                isPlayingMetronome ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-teal-600 hover:bg-teal-500 text-white'
-              }`}
-            >
-              {isPlayingMetronome ? '⏹ Stop Metronome' : '▶ Start Metronome'}
-            </button>
-          </div>
-
-          {/* CHROMATIC PITCH PIPE */}
-          <div className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl">
-            <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider mb-3">🎵 Chromatic Pitch Pipe</h3>
-            <p className="text-[11px] text-slate-400 mb-3">Click any pitch syllable to play vocal reference frequency:</p>
-            <div className="grid grid-cols-4 gap-2">
-              {pitchPipePitches.map((p) => (
-                <button
-                  key={p.note}
-                  onClick={() => playPitch(p.freq, p.note)}
-                  className={`py-2 rounded font-mono font-bold text-xs transition border ${
-                    activePitch === p.note
-                      ? 'bg-teal-500 text-slate-950 border-white scale-105'
-                      : 'bg-slate-800 text-slate-200 border-slate-700 hover:border-teal-400'
-                  }`}
-                >
-                  {p.note}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        {/* SHARED REHEARSAL AUDIO TOOLBAR */}
+        {renderAudioToolbar()}
 
         {/* DIRECTOR'S VIEW CHORAL RISER MAP */}
         <section className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl mb-6">
           <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
             <div>
               <h2 className="text-lg font-bold text-teal-400">🎶 Director's View Choral Riser Chart</h2>
-              <p className="text-xs text-slate-400">Conductor Podium at Stage Front (Bottom). Displays singer voice part and total height (in inches).</p>
+              <p className="text-xs text-slate-400">Conductor Podium at Stage Front (Bottom). Displays singer voice part and height in inches.</p>
             </div>
 
             <div className="flex items-center space-x-3">
@@ -765,9 +545,7 @@ export default function App() {
               {activeRows.map((rowName) => (
                 <div key={rowName} className="flex items-center space-x-2">
                   <div className="w-32 text-right pr-3">
-                    <span className="text-[11px] font-bold uppercase text-slate-400">
-                      {rowName}
-                    </span>
+                    <span className="text-[11px] font-bold uppercase text-slate-400">{rowName}</span>
                   </div>
 
                   <div className={`grid gap-2 flex-1 ${overflowEnabled ? 'grid-cols-7' : 'grid-cols-6'}`}>
@@ -783,9 +561,7 @@ export default function App() {
                               : 'bg-slate-900 border-slate-800 hover:border-slate-700'
                           }`}
                         >
-                          <span className="text-[9px] uppercase text-slate-500 font-mono text-center">
-                            {secName}
-                          </span>
+                          <span className="text-[9px] uppercase text-slate-500 font-mono text-center">{secName}</span>
 
                           <div className="grid grid-cols-4 gap-1 mt-1">
                             {slots.map((slotName) => {
@@ -804,7 +580,6 @@ export default function App() {
                                       : 'bg-slate-950/40 border-slate-800/60'
                                   }`}
                                   onClick={() => singer && setEditingStudent(singer)}
-                                  title={singer ? `${singer.first_name} ${singer.last_name} (${singer.height_inches || 65}")` : ''}
                                 >
                                   {singer ? (
                                     <>
@@ -835,139 +610,9 @@ export default function App() {
           </div>
         </section>
 
-        {/* ENSEMBLE MANAGER */}
-        <section className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl mb-6">
-          <h2 className="text-lg font-semibold text-slate-200 mb-3">🎼 Ensemble & Class Manager</h2>
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            {ensembles.map((ens) => (
-              <div key={ens} className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center space-x-2 text-sm">
-                <span className="font-medium text-teal-300">{ens}</span>
-                <button
-                  onClick={() => handleRenameEnsemble(ens)}
-                  className="text-xs text-slate-400 hover:text-white underline"
-                >
-                  Rename
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <form onSubmit={handleAddEnsemble} className="flex gap-2 max-w-md">
-            <input
-              type="text"
-              placeholder="New Ensemble Name (e.g. Madrigals)"
-              value={newEnsembleName}
-              onChange={(e) => setNewEnsembleName(e.target.value)}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm flex-1 text-white"
-            />
-            <button
-              type="submit"
-              className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2 rounded text-sm transition"
-            >
-              + Add Choir
-            </button>
-          </form>
-        </section>
-
-        {/* ADD STUDENT FORM WITH AUTO FEET & INCHES CONVERTER */}
-        <section className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl mb-6">
-          <h2 className="text-lg font-semibold text-slate-200 mb-4">+ Add New Student</h2>
-          <form onSubmit={handleAddStudent} className="grid grid-cols-1 md:grid-cols-8 gap-3">
-            <input
-              type="text"
-              placeholder="OCPS Student ID"
-              required
-              value={newStudent.student_id}
-              onChange={(e) => setNewStudent({ ...newStudent, student_id: e.target.value })}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-            />
-            <input
-              type="text"
-              placeholder="First Name"
-              required
-              value={newStudent.first_name}
-              onChange={(e) => setNewStudent({ ...newStudent, first_name: e.target.value })}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-            />
-            <input
-              type="text"
-              placeholder="Last Name"
-              required
-              value={newStudent.last_name}
-              onChange={(e) => setNewStudent({ ...newStudent, last_name: e.target.value })}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-            />
-            <select
-              value={newStudent.ensemble}
-              onChange={(e) => setNewStudent({ ...newStudent, ensemble: e.target.value })}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-            >
-              {ensembles.map(e => <option key={e} value={e}>{e}</option>)}
-            </select>
-            <select
-              value={newStudent.voice_part}
-              onChange={(e) => setNewStudent({ ...newStudent, voice_part: e.target.value })}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-            >
-              {voiceParts.map(vp => <option key={vp} value={vp}>{vp}</option>)}
-            </select>
-
-            {/* FEET & INCHES CONVERTER INPUT */}
-            <div className="bg-slate-800 border border-slate-700 px-2 py-1 rounded flex items-center space-x-1 text-xs">
-              <span className="text-slate-400 text-[10px] uppercase font-bold">Height:</span>
-              <select
-                value={inputFeet}
-                onChange={(e) => setInputFeet(Number(e.target.value))}
-                className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-white"
-              >
-                {[4, 5, 6, 7].map(f => <option key={f} value={f}>{f} ft</option>)}
-              </select>
-              <select
-                value={inputInches}
-                onChange={(e) => setInputInches(Number(e.target.value))}
-                className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-white"
-              >
-                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => <option key={i} value={i}>{i} in</option>)}
-              </select>
-              <span className="text-teal-300 font-bold ml-1">={(inputFeet * 12) + inputInches}"</span>
-            </div>
-
-            <select
-              value={newStudent.wenger_section}
-              onChange={(e) => setNewStudent({ ...newStudent, wenger_section: e.target.value })}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-            >
-              {activeRisers.map(sec => <option key={sec} value={sec}>{sec}</option>)}
-            </select>
-            <select
-              value={newStudent.wenger_row}
-              onChange={(e) => setNewStudent({ ...newStudent, wenger_row: e.target.value })}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-            >
-              {activeRows.map(row => <option key={row} value={row}>{row}</option>)}
-            </select>
-            <select
-              value={newStudent.wenger_slot}
-              onChange={(e) => setNewStudent({ ...newStudent, wenger_slot: e.target.value })}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-            >
-              {slots.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <button
-              type="submit"
-              className="md:col-span-8 bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2.5 rounded text-sm transition"
-            >
-              Save Student Record
-            </button>
-          </form>
-        </section>
-
         {/* ROSTER TABLE */}
         <section className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-slate-200">Active Roster ({filteredRoster.length})</h2>
-          </div>
-
+          <h2 className="text-lg font-semibold text-slate-200 mb-4">Active Roster ({filteredRoster.length})</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm border-collapse">
               <thead>
@@ -976,7 +621,7 @@ export default function App() {
                   <th className="py-2.5 px-3">Name</th>
                   <th className="py-2.5 px-3">Primary Ensemble</th>
                   <th className="py-2.5 px-3">Voice Part</th>
-                  <th className="py-2.5 px-3">Height (Total Inches)</th>
+                  <th className="py-2.5 px-3">Height</th>
                   <th className="py-2.5 px-3">Spot Location</th>
                   <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
@@ -997,19 +642,7 @@ export default function App() {
                         onClick={() => setEditingStudent(s)}
                         className="text-slate-300 hover:text-white text-xs px-2.5 py-1 rounded bg-slate-800 border border-slate-700"
                       >
-                        Edit Record
-                      </button>
-                      <button
-                        onClick={() => handleDirectorResetPassword(s.student_id, `${s.first_name} ${s.last_name}`)}
-                        className="text-teal-400 hover:text-teal-300 text-xs px-2.5 py-1 rounded bg-teal-950/40 border border-teal-800/50"
-                      >
-                        Reset Pass
-                      </button>
-                      <button
-                        onClick={() => handleDelete(s.id)}
-                        className="text-red-400 hover:text-red-300 text-xs px-2.5 py-1 rounded bg-red-950/40 border border-red-800/50"
-                      >
-                        Delete
+                        Edit
                       </button>
                     </td>
                   </tr>
@@ -1018,134 +651,39 @@ export default function App() {
             </table>
           </div>
         </section>
-
-        {/* EDIT STUDENT MODAL */}
-        {editingStudent && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-slate-900 border border-teal-800/60 p-6 rounded-xl max-w-md w-full space-y-4">
-              <h3 className="text-lg font-bold text-teal-400">Edit Student Record</h3>
-              
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="First Name"
-                  value={editingStudent.first_name}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, first_name: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-                />
-                <input
-                  type="text"
-                  placeholder="Last Name"
-                  value={editingStudent.last_name}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, last_name: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-                />
-                <select
-                  value={editingStudent.ensemble}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, ensemble: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-                >
-                  {ensembles.map(e => <option key={e} value={e}>{e}</option>)}
-                </select>
-                <select
-                  value={editingStudent.voice_part}
-                  onChange={(e) => setEditingStudent({ ...editingStudent, voice_part: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-                >
-                  {voiceParts.map(vp => <option key={vp} value={vp}>{vp}</option>)}
-                </select>
-
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Total Height (Inches)</label>
-                  <input
-                    type="number"
-                    value={editingStudent.height_inches || 65}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, height_inches: Number(e.target.value) })}
-                    className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Riser Section</label>
-                  <select
-                    value={editingStudent.wenger_section || 'Riser A'}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, wenger_section: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-                  >
-                    {activeRisers.map(sec => <option key={sec} value={sec}>{sec}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Riser Row / Level</label>
-                  <select
-                    value={editingStudent.wenger_row || 'Row 1'}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, wenger_row: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-                  >
-                    {activeRows.map(row => <option key={row} value={row}>{row}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Slot Position (4 Per Row)</label>
-                  <select
-                    value={editingStudent.wenger_slot || 'Far Left'}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, wenger_slot: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white"
-                  >
-                    {slots.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-2">
-                <button
-                  onClick={() => setEditingStudent(null)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs rounded font-semibold text-slate-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveStudentEdit}
-                  className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-xs rounded font-bold text-white"
-                >
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
 
-  // STUDENT PORTAL VIEW
-  const currentTerm = fvaTerms[termIndex];
-
+  // STUDENT VIEW (ACCESSIBLE TO STUDENTS AND DIRECTORS PREVIEWING)
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
+      {/* DIRECTOR PREVIEW BANNER */}
+      {isDirector && viewAsStudentMode && (
+        <div className="bg-teal-900/90 border border-teal-400 text-white px-4 py-2 rounded-xl mb-4 flex justify-between items-center text-xs font-bold">
+          <span>👁 PREVIEW MODE: Viewing app as a Student</span>
+          <button
+            onClick={() => setViewAsStudentMode(false)}
+            className="bg-teal-500 hover:bg-teal-400 text-slate-950 px-3 py-1 rounded font-black"
+          >
+            ← Return to Director Portal
+          </button>
+        </div>
+      )}
+
       <header className="flex justify-between items-center border-b border-teal-900/60 pb-4 mb-6">
         <div className="flex items-center space-x-3">
-          <a
-            href="https://www.instagram.com/olympiatitanchorus"
-            target="_blank"
-            rel="noreferrer"
-            title="Visit Titan Chorus Instagram @olympiatitanchorus"
-            className="group"
-          >
+          <a href="https://www.instagram.com/olympiatitanchorus" target="_blank" rel="noreferrer" className="group">
             <img
               src="/Olympia Titan Chorus 26 Logo - 3.PNG"
               alt="Olympia Titan Chorus Logo"
               className="w-12 h-12 rounded-full border-2 border-teal-400 shadow-md transform group-hover:scale-105 transition object-cover"
-              onError={(e) => {
-                e.target.style.display = 'none';
-              }}
+              onError={(e) => { e.target.style.display = 'none'; }}
             />
           </a>
           <div>
             <h1 className="text-2xl font-bold text-teal-400">Titan Chorus Student Hub</h1>
-            <p className="text-xs text-slate-400">Welcome back, {currentUser.name}</p>
+            <p className="text-xs text-slate-400">Welcome, {currentUser.name}</p>
           </div>
         </div>
 
@@ -1157,65 +695,8 @@ export default function App() {
         </button>
       </header>
 
-      {/* QUICK TOOLS ROW FOR STUDENTS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl">
-          <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider mb-3">📅 Upcoming Events</h3>
-          <div className="space-y-2">
-            {upcomingEvents.slice(0, 2).map((evt, idx) => (
-              <div key={idx} className="bg-slate-950 p-2 rounded border border-slate-800 text-xs">
-                <span className="font-semibold text-teal-300 block">{evt.date}</span>
-                <p className="text-white font-medium">{evt.title}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider mb-2">⏱ Rehearsal Metronome</h3>
-            <div className="text-center my-2">
-              <span className="text-3xl font-extrabold text-white font-mono">{bpm}</span>
-              <span className="text-xs text-slate-400 block">BPM</span>
-            </div>
-            <input
-              type="range"
-              min="40"
-              max="208"
-              value={bpm}
-              onChange={(e) => setBpm(Number(e.target.value))}
-              className="w-full accent-teal-500 cursor-pointer"
-            />
-          </div>
-          <button
-            onClick={toggleMetronome}
-            className={`w-full py-2 rounded font-bold text-xs transition mt-3 ${
-              isPlayingMetronome ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-teal-600 hover:bg-teal-500 text-white'
-            }`}
-          >
-            {isPlayingMetronome ? '⏹ Stop' : '▶ Start'}
-          </button>
-        </div>
-
-        <div className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl">
-          <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider mb-2">🎵 Pitch Pipe</h3>
-          <div className="grid grid-cols-4 gap-1.5">
-            {pitchPipePitches.map((p) => (
-              <button
-                key={p.note}
-                onClick={() => playPitch(p.freq, p.note)}
-                className={`py-1.5 rounded font-mono font-bold text-xs transition border ${
-                  activePitch === p.note
-                    ? 'bg-teal-500 text-slate-950 border-white scale-105'
-                    : 'bg-slate-800 text-slate-200 border-slate-700 hover:border-teal-400'
-                }`}
-              >
-                {p.note}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* SHARED REHEARSAL AUDIO TOOLBAR FOR STUDENTS */}
+      {renderAudioToolbar()}
 
       {/* NAVIGATION TABS */}
       <div className="flex space-x-2 border-b border-teal-900/60 pb-3 mb-6">
@@ -1228,20 +709,20 @@ export default function App() {
           My Profile
         </button>
         <button
+          onClick={() => setActiveTab('uniform')}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+            activeTab === 'uniform' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          👔 Uniform Checklist
+        </button>
+        <button
           onClick={() => setActiveTab('fva')}
           className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
             activeTab === 'fva' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-200'
           }`}
         >
-          🎵 FVA All-State Musicianship Hub
-        </button>
-        <button
-          onClick={() => setActiveTab('security')}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
-            activeTab === 'security' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          Security & Password
+          🎵 FVA Musicianship
         </button>
       </div>
 
@@ -1260,97 +741,111 @@ export default function App() {
         </div>
       )}
 
-      {/* TAB 2: FVA MUSICIANSHIP HUB */}
-      {activeTab === 'fva' && (
-        <div className="space-y-6">
-          <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl max-w-xl mx-auto text-center">
-            <span className="text-xs uppercase font-semibold text-teal-400 tracking-wider">
-              {currentTerm?.category || "FVA Vocabulary"}
-            </span>
-            
-            <div
-              onClick={() => setShowAnswer(!showAnswer)}
-              className="my-6 p-8 bg-slate-950 border border-slate-800 rounded-xl cursor-pointer hover:border-teal-500/50 transition min-h-[160px] flex flex-col justify-center items-center"
-            >
-              <h3 className="text-2xl font-bold text-slate-100">{currentTerm?.term}</h3>
-              {showAnswer ? (
-                <p className="text-teal-300 mt-4 text-sm font-medium leading-relaxed">{currentTerm?.definition}</p>
-              ) : (
-                <p className="text-xs text-slate-500 mt-4">Click to reveal definition</p>
-              )}
-            </div>
+      {/* TAB 2: UNIFORM CHECKLIST */}
+      {activeTab === 'uniform' && (
+        <div className="space-y-6 max-w-2xl mx-auto">
+          <div className="bg-amber-950/40 border border-amber-600/60 p-4 rounded-xl text-xs text-amber-200 leading-relaxed space-y-2">
+            <p className="font-bold text-amber-300 text-sm">⚠️ UNIFORM CARE & CONCERT DAY GUIDELINES</p>
+            <p>
+              Please ensure your name is written <strong>LEGIBLY</strong> on your string backpack and that your choir uniforms are placed inside, neatly folded, on concert days.
+            </p>
+            <p>
+              You may leave your bag hanging on a rack or in a designated practice room. <strong>Do not leave money or valuables in your bag unattended.</strong>
+            </p>
+            <p className="italic text-amber-400">
+              Uniforms are a privilege and must be treated with care, kept clean, and laundered properly.
+            </p>
+          </div>
 
-            <div className="flex justify-between items-center text-xs text-slate-400">
-              <button
-                disabled={termIndex === 0}
-                onClick={() => {
-                  setShowAnswer(false);
-                  setTermIndex(prev => Math.max(0, prev - 1));
-                }}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded font-semibold"
-              >
-                ← Previous
-              </button>
+          <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl space-y-4">
+            <h3 className="text-lg font-bold text-teal-400">Olympia HS Issued Items Checklist</h3>
+            <div className="space-y-3 pt-2">
+              <div className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800">
+                <label className="flex items-center space-x-3 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={studentUniforms.uniform_tshirt}
+                    disabled={studentUniforms.uniform_tshirt && !isDirector}
+                    onChange={(e) => handleSaveUniformChecklist({ ...studentUniforms, uniform_tshirt: e.target.checked })}
+                    className="w-4 h-4 accent-teal-500 rounded"
+                  />
+                  <span className="font-semibold text-white">Choir T-Shirt</span>
+                </label>
+                <select
+                  value={studentUniforms.uniform_tshirt_size}
+                  disabled={studentUniforms.uniform_tshirt && !isDirector}
+                  onChange={(e) => handleSaveUniformChecklist({ ...studentUniforms, uniform_tshirt_size: e.target.value })}
+                  className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white"
+                >
+                  {sizes.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
 
-              <span>Term {termIndex + 1} of {fvaTerms.length}</span>
+              <div className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800">
+                <label className="flex items-center space-x-3 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={studentUniforms.uniform_polo}
+                    disabled={studentUniforms.uniform_polo && !isDirector}
+                    onChange={(e) => handleSaveUniformChecklist({ ...studentUniforms, uniform_polo: e.target.checked })}
+                    className="w-4 h-4 accent-teal-500 rounded"
+                  />
+                  <span className="font-semibold text-white">Choir Black Polo</span>
+                </label>
+                <select
+                  value={studentUniforms.uniform_polo_size}
+                  disabled={studentUniforms.uniform_polo && !isDirector}
+                  onChange={(e) => handleSaveUniformChecklist({ ...studentUniforms, uniform_polo_size: e.target.value })}
+                  className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white"
+                >
+                  {sizes.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
 
-              <button
-                disabled={termIndex === fvaTerms.length - 1}
-                onClick={() => {
-                  setShowAnswer(false);
-                  setTermIndex(prev => Math.min(fvaTerms.length - 1, prev + 1));
-                }}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded font-semibold"
-              >
-                Next →
-              </button>
+              {[
+                { key: 'uniform_dress', label: 'Choir Dress' },
+                { key: 'uniform_jacket', label: 'Choir Jacket' },
+                { key: 'uniform_silver_tie', label: 'Silver Tie' },
+                { key: 'uniform_teal_tie', label: 'Teal Tie' },
+                { key: 'uniform_red_tie', label: 'Red Tie' },
+                { key: 'uniform_white_tie', label: 'White Tie' },
+                { key: 'uniform_backpack', label: 'Choir String Backpack' }
+              ].map((item) => (
+                <div key={item.key} className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800">
+                  <label className="flex items-center space-x-3 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={studentUniforms[item.key]}
+                      disabled={studentUniforms[item.key] && !isDirector}
+                      onChange={(e) => handleSaveUniformChecklist({ ...studentUniforms, [item.key]: e.target.checked })}
+                      className="w-4 h-4 accent-teal-500 rounded"
+                    />
+                    <span className="font-semibold text-white">{item.label}</span>
+                  </label>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 3: SECURITY */}
-      {activeTab === 'security' && (
-        <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl max-w-md mx-auto">
-          <h3 className="text-lg font-semibold text-slate-200 mb-2">Change Password</h3>
-          <p className="text-xs text-slate-400 mb-4">Set a custom password for your student login account.</p>
-
-          <form onSubmit={handleChangePassword} className="space-y-3">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Current Password</label>
-              <input
-                type="password"
-                required
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white focus:outline-none focus:border-teal-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">New Password</label>
-              <input
-                type="password"
-                required
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white focus:outline-none focus:border-teal-400"
-              />
-            </div>
-
-            {passChangeStatus.msg && (
-              <p className={`text-xs ${passChangeStatus.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
-                {passChangeStatus.msg}
-              </p>
+      {/* TAB 3: FVA MUSICIANSHIP */}
+      {activeTab === 'fva' && (
+        <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl max-w-xl mx-auto text-center">
+          <span className="text-xs uppercase font-semibold text-teal-400 tracking-wider">
+            {fvaTerms[termIndex]?.category || "FVA Vocabulary"}
+          </span>
+          <div
+            onClick={() => setShowAnswer(!showAnswer)}
+            className="my-6 p-8 bg-slate-950 border border-slate-800 rounded-xl cursor-pointer hover:border-teal-500/50 transition min-h-[160px] flex flex-col justify-center items-center"
+          >
+            <h3 className="text-2xl font-bold text-slate-100">{fvaTerms[termIndex]?.term}</h3>
+            {showAnswer ? (
+              <p className="text-teal-300 mt-4 text-sm font-medium leading-relaxed">{fvaTerms[termIndex]?.definition}</p>
+            ) : (
+              <p className="text-xs text-slate-500 mt-4">Click to reveal definition</p>
             )}
-
-            <button
-              type="submit"
-              className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 rounded text-sm transition"
-            >
-              Update Password
-            </button>
-          </form>
+          </div>
         </div>
       )}
     </div>
