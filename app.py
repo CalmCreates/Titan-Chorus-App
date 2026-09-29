@@ -39,6 +39,7 @@ class Student(db.Model):
     ensemble = db.Column(db.String(100), nullable=False)
     additional_ensembles = db.Column(db.String(200), nullable=True, default='')
     voice_part = db.Column(db.String(20), nullable=False)
+    height_inches = db.Column(db.Integer, nullable=True, default=65) # Saved strictly in total inches
     wenger_section = db.Column(db.String(20), nullable=True, default='Riser A')
     wenger_row = db.Column(db.String(20), nullable=True, default='Row 1')
     wenger_slot = db.Column(db.String(20), nullable=True, default='Far Left')
@@ -147,6 +148,7 @@ def get_students():
         "ensemble": s.ensemble,
         "additional_ensembles": s.additional_ensembles or '',
         "voice_part": s.voice_part,
+        "height_inches": s.height_inches or 65,
         "wenger_section": s.wenger_section or 'Riser A',
         "wenger_row": s.wenger_row or 'Row 1',
         "wenger_slot": s.wenger_slot or 'Far Left',
@@ -164,6 +166,7 @@ def add_student():
         ensemble=data['ensemble'],
         additional_ensembles=data.get('additional_ensembles', ''),
         voice_part=data['voice_part'],
+        height_inches=int(data.get('height_inches', 65)),
         wenger_section=data.get('wenger_section', 'Riser A'),
         wenger_row=data.get('wenger_row', 'Row 1'),
         wenger_slot=data.get('wenger_slot', 'Far Left'),
@@ -203,6 +206,7 @@ def bulk_add_students():
             existing.last_name = item.get('last_name', existing.last_name)
             existing.ensemble = item.get('ensemble', existing.ensemble)
             existing.voice_part = item.get('voice_part', existing.voice_part)
+            existing.height_inches = int(item.get('height_inches', existing.height_inches or 65))
             existing.wenger_section = item.get('wenger_section', existing.wenger_section)
             existing.wenger_row = item.get('wenger_row', existing.wenger_row)
             existing.wenger_slot = item.get('wenger_slot', existing.wenger_slot)
@@ -215,6 +219,7 @@ def bulk_add_students():
                 ensemble=item.get('ensemble', 'Concert Chorus'),
                 additional_ensembles=item.get('additional_ensembles', ''),
                 voice_part=item.get('voice_part', 'Soprano 1'),
+                height_inches=int(item.get('height_inches', 65)),
                 wenger_section=item.get('wenger_section', 'Riser A'),
                 wenger_row=item.get('wenger_row', 'Row 1'),
                 wenger_slot=item.get('wenger_slot', 'Far Left')
@@ -249,6 +254,7 @@ def update_student(id):
         student.ensemble = data.get('ensemble', student.ensemble)
         student.additional_ensembles = data.get('additional_ensembles', student.additional_ensembles)
         student.voice_part = data.get('voice_part', student.voice_part)
+        student.height_inches = int(data.get('height_inches', student.height_inches or 65))
         student.wenger_section = data.get('wenger_section', student.wenger_section)
         student.wenger_row = data.get('wenger_row', student.wenger_row)
         student.wenger_slot = data.get('wenger_slot', student.wenger_slot)
