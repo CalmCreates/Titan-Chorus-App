@@ -1,5 +1,7 @@
 import os
-from flask import Flask, request, jsonify
+import math
+from datetime import datetime
+from flask import Flask, request, jsonify, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -66,7 +68,26 @@ class SheetMusic(db.Model):
     title = db.Column(db.String(150), nullable=False)
     composer = db.Column(db.String(100), nullable=True)
     concert_folder = db.Column(db.String(100), nullable=False, default='General')
-    pdf_data = db.Column(db.Text, nullable=False) # Base64 encoded PDF string
+    pdf_data = db.Column(db.Text, nullable=False)
+
+class Event(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    location_name = db.Column(db.String(150), nullable=False)
+    event_date = db.Column(db.String(50), nullable=False)
+    call_time = db.Column(db.String(50), nullable=False)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    radius_feet = db.Column(db.Float, default=150.0) # Proximity limit (feet)
+    is_active = db.Column(db.Boolean, default=True)
+
+class AttendanceRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
+    student_id = db.Column(db.String(20), nullable=False)
+    student_name = db.Column(db.String(100), nullable=False)
+    check_in_time = db.Column(db.String(50), nullable=False)
+    distance_feet = db.Column(db.Float, nullable=False)
 
 # Safe Database Initialization
 with app.app_context():
@@ -88,6 +109,15 @@ with app.app_context():
         for name in defaults:
             db.session.add(Ensemble(name=name))
     db.session.commit()
+
+# Helper: Calculate distance in feet between two GPS coordinates (Haversine formula)
+def calculate_distance_feet(lat1, lon1, lat2, lon2):
+    R_feet = 20902231.0 # Radius of Earth in feet
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R_feet * c
 
 # Official 50 FVA Terms Dataset
 FVA_TERMS_FULL = [
@@ -113,7 +143,7 @@ FVA_TERMS_FULL = [
     {"num": 20, "term": "Form", "definition": "the organization and structure of a composition", "category": "Form"},
     {"num": 21, "term": "Binary form", "definition": "AB- form of a composition that has two distinct sections", "category": "Form"},
     {"num": 22, "term": "Strophic", "definition": "describes a song where the stanzas are all sung to the same music", "category": "Form"},
-    {"num": 23, "term": "Part song", "definition": "an unaccompanied homophonic choral composition for three or more voices", category: "Form"},
+    {"num": 23, "term": "Part song", "definition": "an unaccompanied homophonic choral composition for three or more voices", "category": "Form"},
     {"num": 24, "term": "D. C. or Da Capo", "definition": "repeat from the beginning of the composition", "category": "Form"},
     {"num": 25, "term": "Bel canto", "definition": "“beautiful singing”; an Italian Opera term", "category": "Style and Phrasing"},
     {"num": 26, "term": "Cantabile", "definition": "in a singing style; singable", "category": "Style and Phrasing"},
@@ -205,37 +235,6 @@ def get_students():
         "uniform_other_checked": s.uniform_other_checked
     } for s in students])
 
-@app.route('/api/students', methods=['POST'])
-def add_student():
-    data = request.get_json() or {}
-    new_s = Student(
-        student_id=data['student_id'],
-        first_name=data['first_name'],
-        last_name=data['last_name'],
-        ensemble=data['ensemble'],
-        additional_ensembles=data.get('additional_ensembles', ''),
-        voice_part=data['voice_part'],
-        height_inches=int(data.get('height_inches', 65)),
-        wenger_section=data.get('wenger_section', 'Riser A'),
-        wenger_row=data.get('wenger_row', 'Row 1'),
-        wenger_slot=data.get('wenger_slot', 'Far Left')
-    )
-    db.session.add(new_s)
-    
-    if not User.query.filter_by(student_id=data['student_id']).first():
-        user = User(
-            student_id=data['student_id'],
-            name=f"{data['first_name']} {data['last_name']}",
-            password_hash=generate_password_hash('titan123'),
-            role='student',
-            ensemble=data['ensemble'],
-            voice_part=data['voice_part']
-        )
-        db.session.add(user)
-        
-    db.session.commit()
-    return jsonify({"success": True, "message": "Student added successfully"})
-
 @app.route('/api/students/uniform', methods=['POST'])
 def update_student_uniform():
     data = request.get_json() or {}
@@ -261,6 +260,114 @@ def update_student_uniform():
         return jsonify({"success": True, "message": "Uniform checklist updated."})
     return jsonify({"success": False, "message": "Student record not found."}), 404
 
+# EVENT & GPS ATTENDANCE ENDPOINTS
+@app.route('/api/events', methods=['GET'])
+def get_events():
+    events = Event.query.all()
+    return jsonify([{
+        "id": e.id,
+        "title": e.title,
+        "location_name": e.location_name,
+        "event_date": e.event_date,
+        "call_time": e.call_time,
+        "latitude": e.latitude,
+        "longitude": e.longitude,
+        "radius_feet": e.radius_feet,
+        "is_active": e.is_active
+    } for e in events])
+
+@app.route('/api/events', methods=['POST'])
+def create_event():
+    data = request.get_json() or {}
+    new_event = Event(
+        title=data.get('title'),
+        location_name=data.get('location_name'),
+        event_date=data.get('event_date'),
+        call_time=data.get('call_time'),
+        latitude=float(data.get('latitude', 0.0)),
+        longitude=float(data.get('longitude', 0.0)),
+        radius_feet=float(data.get('radius_feet', 150.0)),
+        is_active=data.get('is_active', True)
+    )
+    db.session.add(new_event)
+    db.session.commit()
+    return jsonify({"success": True, "message": "Event created successfully."})
+
+@app.route('/api/events/<int:id>', methods=['DELETE'])
+def delete_event(id):
+    event = Event.query.get(id)
+    if event:
+        AttendanceRecord.query.filter_by(event_id=id).delete()
+        db.session.delete(event)
+        db.session.commit()
+        return jsonify({"success": True})
+    return jsonify({"success": False}), 404
+
+@app.route('/api/attendance/checkin', methods=['POST'])
+def student_checkin():
+    data = request.get_json() or {}
+    event_id = data.get('event_id')
+    student_id = data.get('student_id')
+    student_name = data.get('student_name')
+    user_lat = float(data.get('latitude', 0.0))
+    user_lon = float(data.get('longitude', 0.0))
+
+    event = Event.query.get(event_id)
+    if not event or not event.is_active:
+        return jsonify({"success": False, "message": "This event is no longer active for check-in."}), 400
+
+    # Calculate distance to venue in feet
+    dist_feet = calculate_distance_feet(user_lat, user_lon, event.latitude, event.longitude)
+
+    if dist_feet > event.radius_feet:
+        return jsonify({
+            "success": False,
+            "message": f"Check-In Blocked: You are {int(dist_feet)} ft away from venue. Must be within {int(event.radius_feet)} ft to check in."
+        }), 400
+
+    # Check if already checked in
+    existing = AttendanceRecord.query.filter_by(event_id=event_id, student_id=student_id).first()
+    if existing:
+        return jsonify({"success": True, "message": f"Already checked in at {existing.check_in_time}."})
+
+    now_str = datetime.now().strftime("%I:%M:%S %p (%m/%d/%Y)")
+    rec = AttendanceRecord(
+        event_id=event_id,
+        student_id=student_id,
+        student_name=student_name,
+        check_in_time=now_str,
+        distance_feet=round(dist_feet, 1)
+    )
+    db.session.add(rec)
+    db.session.commit()
+
+    return jsonify({"success": True, "message": f"✓ Check-In Successful at {now_str}! ({int(dist_feet)} ft from venue)"})
+
+@app.route('/api/attendance/report/<int:event_id>', methods=['GET'])
+def get_attendance_report(event_id):
+    records = AttendanceRecord.query.filter_by(event_id=event_id).all()
+    return jsonify([{
+        "student_id": r.student_id,
+        "student_name": r.student_name,
+        "check_in_time": r.check_in_time,
+        "distance_feet": r.distance_feet
+    } for r in records])
+
+@app.route('/api/attendance/export/<int:event_id>', methods=['GET'])
+def export_attendance_csv(event_id):
+    event = Event.query.get(event_id)
+    records = AttendanceRecord.query.filter_by(event_id=event_id).all()
+    
+    csv_output = "Student ID,Student Name,Check-In Timestamp,Distance from Venue (ft)\n"
+    for r in records:
+        csv_output += f'"{r.student_id}","{r.student_name}","{r.check_in_time}","{r.distance_feet}"\n'
+        
+    return Response(
+        csv_output,
+        mimetype="text/csv",
+        headers={"Content-disposition": f"attachment; filename=Attendance_{event.title.replace(' ', '_')}.csv"}
+    )
+
 @app.route('/api/sheet-music', methods=['GET'])
 def get_sheet_music():
     items = SheetMusic.query.all()
@@ -271,28 +378,6 @@ def get_sheet_music():
         "concert_folder": m.concert_folder,
         "pdf_data": m.pdf_data
     } for m in items])
-
-@app.route('/api/sheet-music', methods=['POST'])
-def upload_sheet_music():
-    data = request.get_json() or {}
-    new_piece = SheetMusic(
-        title=data.get('title', 'Untitled Score'),
-        composer=data.get('composer', 'Unknown'),
-        concert_folder=data.get('concert_folder', 'General'),
-        pdf_data=data.get('pdf_data', '')
-    )
-    db.session.add(new_piece)
-    db.session.commit()
-    return jsonify({"success": True, "message": "Sheet music uploaded successfully"})
-
-@app.route('/api/sheet-music/<int:id>', methods=['DELETE'])
-def delete_sheet_music(id):
-    piece = SheetMusic.query.get(id)
-    if piece:
-        db.session.delete(piece)
-        db.session.commit()
-        return jsonify({"success": True})
-    return jsonify({"success": False}), 404
 
 @app.route('/api/fva-terms', methods=['GET'])
 def get_fva_terms():
