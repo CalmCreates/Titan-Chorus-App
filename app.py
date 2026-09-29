@@ -23,24 +23,31 @@ class User(db.Model):
     student_id = db.Column(db.String(20), unique=True, nullable=False)
     name = db.Column(db.String(100), nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(db.String(20), default='student')  # 'director' or 'student'
-    ensemble = db.Column(db.String(50), nullable=True)
+    role = db.Column(db.String(20), default='student')
+    ensemble = db.Column(db.String(100), nullable=True)
     voice_part = db.Column(db.String(20), nullable=True)
+
+class Ensemble(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
 
 class Student(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.String(20), unique=True, nullable=False)
     first_name = db.Column(db.String(50), nullable=False)
     last_name = db.Column(db.String(50), nullable=False)
-    ensemble = db.Column(db.String(50), nullable=False)
+    ensemble = db.Column(db.String(100), nullable=False)
+    additional_ensembles = db.Column(db.String(200), nullable=True, default='')
     voice_part = db.Column(db.String(20), nullable=False)
+    wenger_section = db.Column(db.String(20), nullable=True, default='Riser A')
+    wenger_row = db.Column(db.String(20), nullable=True, default='Row 1')
+    wenger_slot = db.Column(db.String(20), nullable=True, default='Far Left')
     dues_paid = db.Column(db.Boolean, default=False)
     paperwork_complete = db.Column(db.Boolean, default=False)
 
 # Safe Database Initialization
 with app.app_context():
     db.create_all()
-    # Ensure Default Director Account exists
     if not User.query.filter_by(student_id='ADMIN').first():
         admin = User(
             student_id='ADMIN',
@@ -49,7 +56,12 @@ with app.app_context():
             role='director'
         )
         db.session.add(admin)
-        db.session.commit()
+
+    if Ensemble.query.count() == 0:
+        defaults = ['Concert Chorus', 'Bel Canto', 'Titan A Cappella', 'Treble Chorus']
+        for name in defaults:
+            db.session.add(Ensemble(name=name))
+    db.session.commit()
 
 # FVA Omnibus Terms Dataset
 FVA_TERMS = [
@@ -95,6 +107,35 @@ def user_login():
         })
     return jsonify({"success": False, "message": "Invalid Student ID or Password"}), 401
 
+@app.route('/api/ensembles', methods=['GET'])
+def get_ensembles():
+    items = Ensemble.query.all()
+    return jsonify([e.name for e in items])
+
+@app.route('/api/ensembles', methods=['POST'])
+def add_ensemble():
+    data = request.get_json() or {}
+    name = data.get('name', '').strip()
+    if name and not Ensemble.query.filter_by(name=name).first():
+        db.session.add(Ensemble(name=name))
+        db.session.commit()
+        return jsonify({"success": True, "message": f"Ensemble '{name}' added."})
+    return jsonify({"success": False, "message": "Ensemble already exists or invalid name."}), 400
+
+@app.route('/api/ensembles/rename', methods=['POST'])
+def rename_ensemble():
+    data = request.get_json() or {}
+    old_name = data.get('old_name')
+    new_name = data.get('new_name', '').strip()
+    
+    ens = Ensemble.query.filter_by(name=old_name).first()
+    if ens and new_name:
+        ens.name = new_name
+        Student.query.filter_by(ensemble=old_name).update({"ensemble": new_name})
+        db.session.commit()
+        return jsonify({"success": True})
+    return jsonify({"success": False}), 400
+
 @app.route('/api/students', methods=['GET'])
 def get_students():
     students = Student.query.all()
@@ -104,7 +145,11 @@ def get_students():
         "first_name": s.first_name,
         "last_name": s.last_name,
         "ensemble": s.ensemble,
+        "additional_ensembles": s.additional_ensembles or '',
         "voice_part": s.voice_part,
+        "wenger_section": s.wenger_section or 'Riser A',
+        "wenger_row": s.wenger_row or 'Row 1',
+        "wenger_slot": s.wenger_slot or 'Far Left',
         "dues_paid": s.dues_paid,
         "paperwork_complete": s.paperwork_complete
     } for s in students])
@@ -117,7 +162,11 @@ def add_student():
         first_name=data['first_name'],
         last_name=data['last_name'],
         ensemble=data['ensemble'],
+        additional_ensembles=data.get('additional_ensembles', ''),
         voice_part=data['voice_part'],
+        wenger_section=data.get('wenger_section', 'Riser A'),
+        wenger_row=data.get('wenger_row', 'Row 1'),
+        wenger_slot=data.get('wenger_slot', 'Far Left'),
         dues_paid=data.get('dues_paid', False),
         paperwork_complete=data.get('paperwork_complete', False)
     )
@@ -136,6 +185,76 @@ def add_student():
         
     db.session.commit()
     return jsonify({"success": True, "message": "Student added successfully"})
+
+@app.route('/api/students/bulk', methods=['POST'])
+def bulk_add_students():
+    records = request.get_json() or []
+    added_count = 0
+    updated_count = 0
+
+    for item in records:
+        sid = str(item.get('student_id', '')).strip()
+        if not sid:
+            continue
+
+        existing = Student.query.filter_by(student_id=sid).first()
+        if existing:
+            existing.first_name = item.get('first_name', existing.first_name)
+            existing.last_name = item.get('last_name', existing.last_name)
+            existing.ensemble = item.get('ensemble', existing.ensemble)
+            existing.voice_part = item.get('voice_part', existing.voice_part)
+            existing.wenger_section = item.get('wenger_section', existing.wenger_section)
+            existing.wenger_row = item.get('wenger_row', existing.wenger_row)
+            existing.wenger_slot = item.get('wenger_slot', existing.wenger_slot)
+            updated_count += 1
+        else:
+            s = Student(
+                student_id=sid,
+                first_name=item.get('first_name', 'Student'),
+                last_name=item.get('last_name', 'User'),
+                ensemble=item.get('ensemble', 'Concert Chorus'),
+                additional_ensembles=item.get('additional_ensembles', ''),
+                voice_part=item.get('voice_part', 'Soprano 1'),
+                wenger_section=item.get('wenger_section', 'Riser A'),
+                wenger_row=item.get('wenger_row', 'Row 1'),
+                wenger_slot=item.get('wenger_slot', 'Far Left')
+            )
+            db.session.add(s)
+
+            if not User.query.filter_by(student_id=sid).first():
+                user = User(
+                    student_id=sid,
+                    name=f"{item.get('first_name', 'Student')} {item.get('last_name', 'User')}",
+                    password_hash=generate_password_hash('titan123'),
+                    role='student',
+                    ensemble=item.get('ensemble', 'Concert Chorus'),
+                    voice_part=item.get('voice_part', 'Soprano 1')
+                )
+                db.session.add(user)
+            added_count += 1
+
+    db.session.commit()
+    return jsonify({
+        "success": True,
+        "message": f"Processed {len(records)} records ({added_count} added, {updated_count} updated)."
+    })
+
+@app.route('/api/students/<int:id>', methods=['PUT'])
+def update_student(id):
+    data = request.get_json() or {}
+    student = Student.query.get(id)
+    if student:
+        student.first_name = data.get('first_name', student.first_name)
+        student.last_name = data.get('last_name', student.last_name)
+        student.ensemble = data.get('ensemble', student.ensemble)
+        student.additional_ensembles = data.get('additional_ensembles', student.additional_ensembles)
+        student.voice_part = data.get('voice_part', student.voice_part)
+        student.wenger_section = data.get('wenger_section', student.wenger_section)
+        student.wenger_row = data.get('wenger_row', student.wenger_row)
+        student.wenger_slot = data.get('wenger_slot', student.wenger_slot)
+        db.session.commit()
+        return jsonify({"success": True})
+    return jsonify({"success": False}), 404
 
 @app.route('/api/students/<int:id>', methods=['DELETE'])
 def delete_student(id):
