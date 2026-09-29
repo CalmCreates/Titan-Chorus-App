@@ -2,6 +2,40 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const API_BASE = "https://titan-chorus-app.onrender.com/api";
 
+const DAILY_QUOTES = [
+  "Music can change the world because it can change people. — Bono",
+  "Where words fail, music speaks. — Hans Christian Andersen",
+  "We don't sing because we are happy; we are happy because we sing. — William James",
+  "To sing is to pray twice. — Saint Augustine",
+  "Choral singing is a model for human harmony. — Eric Whitacre",
+  "Music is the literature of the heart; it commences where speech ends. — Alphonse de Lamartine",
+  "Excellence is not an act, but a habit. Practice with purpose! — Aristotle",
+  "The only thing better than singing is more singing. — Ella Fitzgerald",
+  "Singing in a choir is a unique opportunity to build harmony together.",
+  "Music produces a kind of pleasure which human nature cannot do without. — Confucius",
+  "One good thing about music, when it hits you, you feel no pain. — Bob Marley",
+  "Strive for progress, not perfection.",
+  "There is no harmony without diversity of voices.",
+  "Your voice is an instrument like no other; care for it and lead with heart.",
+  "Music gives a soul to the universe, wings to the mind, and life to everything. — Plato",
+  "Great choirs are not made of great voices, but of committed hearts.",
+  "Listen with your ears, sing with your soul.",
+  "Vocal energy is contagious — lift up those singing beside you!",
+  "A choir is the ultimate team sport.",
+  "Consistency in rehearsal breeds confidence on stage.",
+  "When you sing, you open your heart to the world.",
+  "Music brings us together when words alone fall short.",
+  "Tone quality is built note by note, breath by breath.",
+  "Every rehearsal is an opportunity to touch a life.",
+  "Sing with conviction, perform with passion.",
+  "Posture, breath, support — the foundation of every great phrase.",
+  "The secret to choir unity is active listening.",
+  "Believe in your sound, trust your choir family.",
+  "Music washes away from the soul the dust of everyday life. — Berthold Auerbach",
+  "We strive to touch lives through the power of song!",
+  "Sing like nobody is listening, rehearse like everyone is."
+];
+
 const DEFAULT_FVA_TERMS = [
   { num: 1, term: "Anacrusis", definition: "upbeat or pickup", category: "Music Terms" },
   { num: 2, term: "Arpeggio", definition: "the notes of the chord played in succession to one another, rather than simultaneously; a broken chord", category: "Music Terms" },
@@ -100,14 +134,25 @@ export default function App() {
   const [eventReportData, setEventReportData] = useState([]);
   const [checkInStatusMsg, setCheckInStatusMsg] = useState('');
 
-  // New Event Form State (Director)
+  // Director New Event Form
   const [newEventTitle, setNewEventTitle] = useState('');
-  const [newEventLocation, setNewEventLocation] = useState('OHS Choir Room');
+  const [newEventLocation, setNewEventLocation] = useState('Olympia HS Choir Room');
   const [newEventDate, setNewEventDate] = useState('');
   const [newEventCallTime, setNewEventCallTime] = useState('');
   const [newEventLat, setNewEventLat] = useState(28.5284);
   const [newEventLon, setNewEventLon] = useState(-81.5471);
   const [newEventRadius, setNewEventRadius] = useState(150);
+
+  // SHEET MUSIC STATE
+  const [sheetMusicList, setSheetMusicList] = useState([]);
+  const [selectedConcertFolder, setSelectedConcertFolder] = useState('ALL SHEET MUSIC');
+  const [concertFolders, setConcertFolders] = useState(['Fall Choral Showcase', 'Winter Concert', 'MPA Assessment', 'Spring Concert']);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [previewPdf, setPreviewPdf] = useState(null);
+  const [newPieceTitle, setNewPieceTitle] = useState('');
+  const [newPieceComposer, setNewPieceComposer] = useState('');
+  const [newPieceFolder, setNewPieceFolder] = useState('Fall Choral Showcase');
+  const [newPiecePdfData, setNewPiecePdfData] = useState('');
 
   // Uniform Tracking State
   const [studentUniforms, setStudentUniforms] = useState({
@@ -167,12 +212,29 @@ export default function App() {
     { note: 'A#4', label: 'A#/Bb', freq: 466.16, leftPos: '74.5%' }
   ];
 
+  // Helper for Daily Quote & Formatting Date
+  const getDailyQuote = () => {
+    const today = new Date();
+    const dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
+    return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
+  };
+
+  const getFormattedDate = () => {
+    return new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
   useEffect(() => {
     if (currentUser) {
       fetchEnsembles();
       fetchStudents();
       fetchFvaTerms();
       fetchEvents();
+      fetchSheetMusic();
     }
   }, [currentUser]);
 
@@ -275,13 +337,20 @@ export default function App() {
     } catch (e) { console.error('Error fetching events:', e); }
   };
 
+  const fetchSheetMusic = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sheet-music`);
+      if (res.ok) setSheetMusicList(await res.json());
+    } catch (e) { console.error('Error fetching sheet music:', e); }
+  };
+
   const handleGetCurrentGps = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setNewEventLat(pos.coords.latitude);
           setNewEventLon(pos.coords.longitude);
-          alert(`Captured Current Coordinates:\nLat: ${pos.coords.latitude}\nLon: ${pos.coords.longitude}`);
+          alert(`Captured Venue GPS Coordinates:\nLatitude: ${pos.coords.latitude}\nLongitude: ${pos.coords.longitude}`);
         },
         (err) => alert("GPS Permission denied or unavailable.")
       );
@@ -320,6 +389,53 @@ export default function App() {
         fetchEvents();
         if (selectedEventReport && selectedEventReport.id === eventId) setSelectedEventReport(null);
       } catch (err) { console.error('Error deleting event:', err); }
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type === "application/pdf") {
+      const reader = new FileReader();
+      reader.onloadend = () => setNewPiecePdfData(reader.result);
+      reader.readAsDataURL(file);
+    } else {
+      alert("Please upload a valid PDF document.");
+    }
+  };
+
+  const handleSaveSheetMusic = async (e) => {
+    e.preventDefault();
+    if (!newPiecePdfData) {
+      alert("Please select a PDF file first.");
+      return;
+    }
+    try {
+      await fetch(`${API_BASE}/sheet-music`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newPieceTitle,
+          composer: newPieceComposer,
+          concert_folder: newPieceFolder,
+          pdf_data: newPiecePdfData
+        })
+      });
+      setNewPieceTitle('');
+      setNewPieceComposer('');
+      setNewPiecePdfData('');
+      fetchSheetMusic();
+    } catch (e) {
+      console.error('Error uploading score:', e);
+    }
+  };
+
+  const handleDeleteSheetMusic = async (id) => {
+    if (window.confirm("Are you sure you want to delete this score?")) {
+      try {
+        await fetch(`${API_BASE}/sheet-music/${id}`, { method: 'DELETE' });
+        fetchSheetMusic();
+        if (previewPdf && previewPdf.id === id) setPreviewPdf(null);
+      } catch (e) { console.error('Error deleting score:', e); }
     }
   };
 
@@ -379,7 +495,7 @@ export default function App() {
         setCurrentUser(data);
         setPassword('');
       } else {
-        setErrorMsg(data.message || 'Login failed');
+        setErrorMsg(data.message || 'Invalid Student ID or Password');
       }
     } catch (err) {
       setErrorMsg('Connection error. Is backend online?');
@@ -461,7 +577,6 @@ export default function App() {
   const playIntervalMelodicThenHarmonic = (f1, f2) => {
     try {
       const ctx = getAudioContext();
-      
       const osc1 = ctx.createOscillator();
       const g1 = ctx.createGain();
       osc1.frequency.setValueAtTime(f1, ctx.currentTime);
@@ -548,7 +663,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-4">
         <div className="bg-slate-900 border border-teal-800/60 p-8 rounded-xl shadow-2xl max-w-md w-full">
           <div className="text-center mb-6">
-            <a href="https://www.instagram.com/olympiitanchorus" target="_blank" rel="noreferrer" className="inline-block transform hover:scale-105 transition mb-3">
+            <a href="https://www.instagram.com/olympiatitanchorus" target="_blank" rel="noreferrer" className="inline-block transform hover:scale-105 transition mb-3">
               <img
                 src="/Olympia Titan Chorus 26 Logo - 3.PNG"
                 alt="Olympia Titan Chorus Crest"
@@ -567,7 +682,7 @@ export default function App() {
               <input
                 type="text"
                 required
-                placeholder="Enter Student ID"
+                placeholder="Enter Student ID or ADMIN"
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-teal-400"
@@ -601,6 +716,23 @@ export default function App() {
   }
 
   const isDirector = currentUser.role === 'director';
+
+  // DAILY MOTIVATIONAL BANNER COMPONENT
+  const renderDailyMotivationHeader = () => (
+    <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 border border-teal-500/40 p-4 rounded-xl mb-6 shadow-xl flex flex-col md:flex-row justify-between items-center text-center md:text-left gap-3">
+      <div>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-teal-300 block mb-0.5">
+          📅 TODAY IS {getFormattedDate().toUpperCase()}
+        </span>
+        <p className="text-sm font-semibold text-amber-200 italic">
+          "{getDailyQuote()}"
+        </p>
+      </div>
+      <span className="text-xs bg-teal-900/60 border border-teal-500/50 text-teal-300 font-bold px-3 py-1.5 rounded-full whitespace-nowrap">
+        ✨ Titan Inspiration
+      </span>
+    </div>
+  );
 
   // REHEARSAL AUDIO TOOLBAR WIDGET
   const renderAudioToolbar = () => (
@@ -730,6 +862,331 @@ export default function App() {
         </div>
       </div>
     </div>
+  );
+
+  // DIRECTOR SHEET MUSIC LIBRARY COMPONENT
+  const renderDirectorMusicLibrary = () => {
+    const filteredScores = selectedConcertFolder === 'ALL SHEET MUSIC'
+      ? sheetMusicList
+      : sheetMusicList.filter(s => s.concert_folder === selectedConcertFolder);
+
+    return (
+      <section className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl mb-6 space-y-6">
+        <div className="flex flex-wrap justify-between items-center gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <h2 className="text-xl font-bold text-teal-400">🎼 Concert Sheet Music Library</h2>
+            <p className="text-xs text-slate-400">Upload and preview emergency backup PDF scores organized by Concert Folder.</p>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              placeholder="Add New Concert Folder..."
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded text-xs text-white"
+            />
+            <button
+              onClick={() => {
+                if (newFolderName.trim() && !concertFolders.includes(newFolderName)) {
+                  setConcertFolders([...concertFolders, newFolderName.trim()]);
+                  setNewFolderName('');
+                }
+              }}
+              className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-3 py-1.5 rounded text-xs"
+            >
+              + Add Folder
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {['ALL SHEET MUSIC', ...concertFolders].map((folder) => (
+            <button
+              key={folder}
+              onClick={() => setSelectedConcertFolder(folder)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border ${
+                selectedConcertFolder === folder
+                  ? 'bg-amber-500 text-slate-950 border-white'
+                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
+              }`}
+            >
+              📁 {folder}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={handleSaveSheetMusic} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+          <h3 className="text-xs font-bold text-teal-300 uppercase">+ Upload New PDF Score</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <input
+              type="text"
+              required
+              placeholder="Score Title (e.g. Sicut Cervus)"
+              value={newPieceTitle}
+              onChange={(e) => setNewPieceTitle(e.target.value)}
+              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+            />
+            <input
+              type="text"
+              placeholder="Composer (e.g. Palestrina)"
+              value={newPieceComposer}
+              onChange={(e) => setNewPieceComposer(e.target.value)}
+              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+            />
+            <select
+              value={newPieceFolder}
+              onChange={(e) => setNewPieceFolder(e.target.value)}
+              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+            >
+              {concertFolders.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2">
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={handleFileUpload}
+              className="text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-teal-400 hover:file:bg-slate-700 cursor-pointer"
+            />
+            <button
+              type="submit"
+              className="w-full sm:w-auto bg-teal-600 hover:bg-teal-500 text-white font-bold px-6 py-2 rounded-lg text-xs transition shadow-md"
+            >
+              Save to Library
+            </button>
+          </div>
+        </form>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredScores.map((score) => (
+            <div key={score.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between space-y-3">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block mb-1">
+                  📁 {score.concert_folder}
+                </span>
+                <h4 className="text-base font-bold text-white leading-snug">{score.title}</h4>
+                <p className="text-xs text-slate-400">{score.composer}</p>
+              </div>
+
+              <div className="flex justify-between items-center pt-2 border-t border-slate-800/80">
+                <button
+                  onClick={() => setPreviewPdf(score)}
+                  className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-3 py-1.5 rounded text-xs transition"
+                >
+                  👁 Open PDF Reader
+                </button>
+                <button
+                  onClick={() => handleDeleteSheetMusic(score.id)}
+                  className="text-rose-400 hover:text-rose-300 font-bold text-xs"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {previewPdf && (
+          <div className="fixed inset-0 bg-slate-950/90 z-50 flex flex-col p-4 md:p-8">
+            <div className="flex justify-between items-center bg-slate-900 border border-slate-800 p-4 rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-teal-400">{previewPdf.title}</h3>
+                <p className="text-xs text-slate-400">{previewPdf.composer} — Folder: {previewPdf.concert_folder}</p>
+              </div>
+              <button
+                onClick={() => setPreviewPdf(null)}
+                className="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded text-xs"
+              >
+                ✕ Close Reader
+              </button>
+            </div>
+
+            <iframe
+              src={previewPdf.pdf_data}
+              title="PDF Reader"
+              className="w-full flex-1 rounded-b-xl border border-slate-800 bg-white"
+            />
+          </div>
+        )}
+      </section>
+    );
+  };
+
+  // DIRECTOR EVENT MANAGEMENT & ATTENDANCE REPORTING
+  const renderDirectorAttendanceManager = () => (
+    <section className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl mb-6 space-y-6">
+      <div className="border-b border-slate-800 pb-3">
+        <h2 className="text-xl font-bold text-teal-400">📍 Event GPS Attendance Manager</h2>
+        <p className="text-xs text-slate-400">Create performance events with 150 ft GPS geofences and generate live check-in reports.</p>
+      </div>
+
+      <form onSubmit={handleCreateEvent} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+        <h3 className="text-xs font-bold text-teal-300 uppercase">+ Create New Event with GPS Geofence</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <input
+            type="text"
+            required
+            placeholder="Event Title (e.g. Fall Showcase Call)"
+            value={newEventTitle}
+            onChange={(e) => setNewEventTitle(e.target.value)}
+            className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+          />
+          <input
+            type="text"
+            required
+            placeholder="Venue Name (e.g. Auditorium)"
+            value={newEventLocation}
+            onChange={(e) => setNewEventLocation(e.target.value)}
+            className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+          />
+          <input
+            type="text"
+            required
+            placeholder="Date (e.g. Oct 28, 2026)"
+            value={newEventDate}
+            onChange={(e) => setNewEventDate(e.target.value)}
+            className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+          />
+          <input
+            type="text"
+            required
+            placeholder="Call Time (e.g. 6:15 PM Call)"
+            value={newEventCallTime}
+            onChange={(e) => setNewEventCallTime(e.target.value)}
+            className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          <input
+            type="number"
+            step="any"
+            required
+            placeholder="Latitude"
+            value={newEventLat}
+            onChange={(e) => setNewEventLat(Number(e.target.value))}
+            className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+          />
+          <input
+            type="number"
+            step="any"
+            required
+            placeholder="Longitude"
+            value={newEventLon}
+            onChange={(e) => setNewEventLon(Number(e.target.value))}
+            className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+          />
+          <div className="flex items-center space-x-2">
+            <span className="text-xs text-slate-400">Radius (ft):</span>
+            <input
+              type="number"
+              value={newEventRadius}
+              onChange={(e) => setNewEventRadius(Number(e.target.value))}
+              className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white font-bold"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap justify-between items-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={handleGetCurrentGps}
+            className="bg-slate-800 hover:bg-slate-700 text-teal-300 font-bold px-3 py-2 rounded text-xs border border-slate-700"
+          >
+            📍 Capture My Current GPS Coordinates
+          </button>
+          <button
+            type="submit"
+            className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-6 py-2 rounded text-xs transition shadow-md"
+          >
+            Publish Event
+          </button>
+        </div>
+      </form>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {eventsList.map((evt) => (
+          <div key={evt.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div className="flex justify-between items-start">
+              <div>
+                <h4 className="text-base font-bold text-white">{evt.title}</h4>
+                <p className="text-xs text-teal-400 font-semibold">{evt.location_name} • {evt.event_date}</p>
+                <p className="text-xs text-amber-300 font-mono mt-0.5">⏱ Call Time: {evt.call_time}</p>
+                <p className="text-[10px] text-slate-500 font-mono mt-1">
+                  GPS Geofence: {evt.latitude.toFixed(4)}, {evt.longitude.toFixed(4)} (Within {evt.radius_feet} ft)
+                </p>
+              </div>
+              <button
+                onClick={() => handleDeleteEvent(evt.id)}
+                className="text-rose-400 hover:text-rose-300 text-xs font-bold"
+              >
+                Delete
+              </button>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => handleFetchAttendanceReport(evt)}
+                className="flex-1 bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 rounded text-xs transition"
+              >
+                📋 View Check-In Report
+              </button>
+              <a
+                href={`${API_BASE}/attendance/export/${evt.id}`}
+                download
+                className="bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold px-3 py-2 rounded text-xs border border-slate-700 text-center"
+              >
+                📥 CSV
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {selectedEventReport && (
+        <div className="bg-slate-950 p-5 rounded-xl border border-teal-500/50 space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+            <div>
+              <h3 className="text-lg font-bold text-teal-400">
+                Attendance Log: {selectedEventReport.title}
+              </h3>
+              <p className="text-xs text-slate-400">Total Check-Ins: {eventReportData.length} Students</p>
+            </div>
+            <button
+              onClick={() => setSelectedEventReport(null)}
+              className="text-slate-400 hover:text-white text-xs font-bold"
+            >
+              ✕ Close
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 uppercase">
+                  <th className="py-2 px-2">Student ID</th>
+                  <th className="py-2 px-2">Student Name</th>
+                  <th className="py-2 px-2">Check-In Timestamp</th>
+                  <th className="py-2 px-2">Distance from Venue</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {eventReportData.map((row, i) => (
+                  <tr key={i}>
+                    <td className="py-2 px-2 font-mono text-teal-400">{row.student_id}</td>
+                    <td className="py-2 px-2 font-bold text-white">{row.student_name}</td>
+                    <td className="py-2 px-2 text-amber-300 font-mono">{row.check_in_time}</td>
+                    <td className="py-2 px-2 text-slate-300 font-mono">{row.distance_feet} ft</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </section>
   );
 
   // FVA VOCABULARY TAB RENDERER
@@ -963,6 +1420,198 @@ export default function App() {
     </div>
   );
 
+  // DIRECTOR ADMIN DASHBOARD VIEW
+  if (isDirector && !viewAsStudentMode) {
+    const processedRoster = getProcessedRoster();
+
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
+        <header className="flex justify-between items-center border-b border-teal-900/60 pb-4 mb-6">
+          <div className="flex items-center space-x-3">
+            <a href="https://www.instagram.com/olympiatitanchorus" target="_blank" rel="noreferrer" className="group">
+              <img
+                src="/Olympia Titan Chorus 26 Logo - 3.PNG"
+                alt="Olympia Titan Chorus Logo"
+                className="w-12 h-12 rounded-full border-2 border-teal-400 shadow-md transform group-hover:scale-105 transition object-cover"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            </a>
+            <div>
+              <h1 className="text-2xl font-bold text-teal-400">Titan Chorus Admin Portal</h1>
+              <p className="text-xs text-slate-400">Director: {currentUser.name}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setViewAsStudentMode(true)}
+              className="bg-teal-950 border border-teal-400 hover:bg-teal-900 text-teal-300 text-xs font-bold px-3.5 py-2 rounded-lg transition flex items-center space-x-1.5 shadow-md"
+            >
+              <span>👁 Preview Student View</span>
+            </button>
+            <button
+              onClick={() => setCurrentUser(null)}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm px-4 py-2 rounded-lg"
+            >
+              Sign Out
+            </button>
+          </div>
+        </header>
+
+        {renderDailyMotivationHeader()}
+        {renderAudioToolbar()}
+        {renderDirectorMusicLibrary()}
+        {renderDirectorAttendanceManager()}
+
+        {/* DIRECTOR'S VIEW CHORAL RISER MAP */}
+        <section className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl mb-6">
+          <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-teal-400">🎶 Director's View Choral Riser Chart</h2>
+              <p className="text-xs text-slate-400">Conductor Podium at Stage Front (Bottom). Displays singer voice part and height in inches.</p>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setOverflowEnabled(!overflowEnabled)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border ${
+                  overflowEnabled
+                    ? 'bg-teal-500 text-slate-950 border-teal-300'
+                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-teal-400'
+                }`}
+              >
+                {overflowEnabled ? '✓ Overflow Mode Active (Riser G + Ground)' : '+ Enable Overflow Mode'}
+              </button>
+
+              <select
+                value={filterEnsemble}
+                onChange={(e) => setFilterEnsemble(e.target.value)}
+                className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded text-sm text-slate-200 font-bold"
+              >
+                <option value="All Ensembles">All Ensembles (De-duplicated Roster)</option>
+                {ensembles.map(e => <option key={e} value={e}>{e}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="bg-slate-950/90 border border-slate-800 p-4 rounded-xl overflow-x-auto">
+            <div className="min-w-[1000px] space-y-3">
+              {activeRows.map((rowName) => (
+                <div key={rowName} className="flex items-center space-x-2">
+                  <div className="w-32 text-right pr-3">
+                    <span className="text-[11px] font-bold uppercase text-slate-400">{rowName}</span>
+                  </div>
+
+                  <div className={`grid gap-2 flex-1 ${overflowEnabled ? 'grid-cols-7' : 'grid-cols-6'}`}>
+                    {activeRisers.map((secName) => {
+                      const isGround = rowName === 'Ground';
+
+                      return (
+                        <div
+                          key={secName}
+                          className={`p-2 rounded border transition min-h-[75px] flex flex-col justify-between ${
+                            isGround
+                              ? 'bg-teal-950/20 border-dashed border-teal-500/40 hover:bg-teal-900/30'
+                              : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                          }`}
+                        >
+                          <span className="text-[9px] uppercase text-slate-500 font-mono text-center">{secName}</span>
+
+                          <div className="grid grid-cols-4 gap-1 mt-1">
+                            {slots.map((slotName) => {
+                              const singer = processedRoster.find(
+                                s => (s.wenger_section || 'Riser A') === secName &&
+                                     (s.wenger_row || 'Row 1') === rowName &&
+                                     (s.wenger_slot || 'Far Left') === slotName
+                              );
+
+                              return (
+                                <div
+                                  key={slotName}
+                                  className={`p-1 rounded text-center border min-h-[42px] flex flex-col justify-center ${
+                                    singer
+                                      ? 'bg-slate-800 border-slate-700 hover:border-teal-400 cursor-pointer'
+                                      : 'bg-slate-950/40 border-slate-800/60'
+                                  }`}
+                                >
+                                  {singer ? (
+                                    <>
+                                      <p className="text-[10px] font-bold text-white leading-tight">
+                                        <span className="text-amber-400 mr-0.5">#{singer.rosterNumber}</span>
+                                        {singer.first_name} {singer.last_name[0]}.
+                                      </p>
+                                      <p className="text-[8px] text-teal-400 font-mono">{singer.voice_part}</p>
+                                      <p className="text-[7px] text-slate-400">{singer.height_inches || 65}"</p>
+                                    </>
+                                  ) : (
+                                    <span className="text-[8px] text-slate-700">•</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-center mt-6 pt-3 border-t border-slate-800/80">
+              <span className="text-xs uppercase tracking-widest text-teal-400 font-bold">
+                ▼ STAGE FRONT — CONDUCTOR PODIUM (DIRECTOR'S VIEW) ▼
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {/* ALPHABETICAL DE-DUPLICATED ROSTER TABLE */}
+        <section className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-200">
+                Alphabetical Class Roster ({processedRoster.length} Singers)
+              </h2>
+              <p className="text-xs text-slate-400">Sorted alphabetically by Last Name with no duplicate Student IDs.</p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase">
+                  <th className="py-2.5 px-3">#</th>
+                  <th className="py-2.5 px-3">Student ID</th>
+                  <th className="py-2.5 px-3">Name</th>
+                  <th className="py-2.5 px-3">Primary Ensemble</th>
+                  <th className="py-2.5 px-3">Voice Part</th>
+                  <th className="py-2.5 px-3">Height</th>
+                  <th className="py-2.5 px-3">Spot Location</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-slate-300">
+                {processedRoster.map((s) => (
+                  <tr key={s.student_id} className="hover:bg-slate-800/50">
+                    <td className="py-2.5 px-3 font-mono text-amber-400 font-bold">{s.rosterNumber}</td>
+                    <td className="py-2.5 px-3 font-mono text-teal-400">{s.student_id}</td>
+                    <td className="py-2.5 px-3 font-medium text-white">{s.last_name}, {s.first_name}</td>
+                    <td className="py-2.5 px-3">{s.ensemble}</td>
+                    <td className="py-2.5 px-3">{s.voice_part}</td>
+                    <td className="py-2.5 px-3 font-bold text-amber-300">{s.height_inches || 65}"</td>
+                    <td className="py-2.5 px-3 font-semibold text-teal-300">
+                      {s.wenger_section || 'Riser A'} — {s.wenger_row || 'Row 1'} ({s.wenger_slot || 'Far Left'})
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   // STUDENT VIEW
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
@@ -1002,6 +1651,7 @@ export default function App() {
         </button>
       </header>
 
+      {renderDailyMotivationHeader()}
       {renderAudioToolbar()}
 
       {/* TABS NAVIGATION BAR */}
