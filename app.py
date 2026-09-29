@@ -120,105 +120,39 @@ def add_student():
 def delete_student(id):
     student = Student.query.get(id)
     if student:
+        # Also clean up User login account if present
+        user = User.query.filter_by(student_id=student.student_id).first()
+        if user:
+            db.session.delete(user)
         db.session.delete(student)
         db.session.commit()
         return jsonify({"success": True})
     return jsonify({"success": False}), 404
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)    return jsonify({
-        "program": "Olympia High School Titan Chorus",
-        "motto": "We Strive to Touch Lives!",
-        "status": "Online",
-        "database": "Connected" if raw_db_url else "Fallback"
-    }), 200
+# Student Self-Service Password Change
+@app.route('/api/user/change-password', methods=['POST'])
+def change_password():
+    data = request.get_json()
+    user = User.query.filter_by(student_id=data.get('student_id')).first()
+    if user and check_password_hash(user.password_hash, data.get('old_password')):
+        user.password_hash = generate_password_hash(data.get('new_password'))
+        db.session.commit()
+        return jsonify({"success": True, "message": "Password updated successfully!"})
+    return jsonify({"success": False, "message": "Incorrect current password."}), 400
 
-# --- SAFE ALUMNI EMAIL SENDER ---
-def send_alumni_invitation_email(recipient_email, first_name):
-    # If SendGrid API key isn't provided, skip silently instead of throwing an error
-    if not SENDGRID_API_KEY:
-        print(f"Skipping alumni email to {recipient_email}: SENDGRID_API_KEY not set.")
-        return False
+# Director Password Reset (Override)
+@app.route('/api/admin/reset-student-password', methods=['POST'])
+def reset_student_password():
+    data = request.get_json()
+    student_id = data.get('student_id')
+    new_password = data.get('new_password', 'titan123')
     
-    try:
-        sg = sendgrid.SendGridAPIClient(api_key=SENDGRID_API_KEY)
-        subject = "Congratulations & Welcome to the Olympia Titan Chorus Alumni Network!"
-        content = f"""
-        <div style="font-family: Arial, sans-serif; color: #111;">
-            <h2 style="color: #005f73;">Olympia High School Titan Chorus</h2>
-            <p><em>"We Strive to Touch Lives!"</em></p>
-            <hr>
-            <p>Dear {first_name},</p>
-            <p>Congratulations on your graduation!</p>
-            <p><a href="https://titanchorus.org/alumni/join?email={recipient_email}">Join Alumni Network</a></p>
-        </div>
-        """
-        message = Mail(
-            from_email=('alumni@titanchorus.org', 'Olympia Titan Chorus'),
-            to_emails=recipient_email,
-            subject=subject,
-            html_content=content
-        )
-        sg.send(message)
-        return True
-    except Exception as e:
-        print(f"SendGrid Error for {recipient_email}: {e}")
-        return False
-
-# --- ANNUAL ROLLOVER ROUTE ---
-@app.route('/api/admin/annual-rollover', methods=['POST'])
-def run_annual_rollover():
-    data = request.json or {}
-    current_year = data.get('current_school_year', '2025-2026')
-    next_year = data.get('next_school_year', '2026-2027')
-    current_grad_class = int(current_year.split('-')[1])
-
-    try:
-        # Find graduating seniors
-        graduating_students = db.session.execute(
-            "SELECT id, first_name, email FROM students WHERE graduation_year <= :grad_year AND status = 'Active'",
-            {'grad_year': current_grad_class}
-        ).fetchall()
-
-        for student in graduating_students:
-            db.session.execute(
-                "UPDATE students SET status = 'Archived_Alumni' WHERE id = :id",
-                {'id': student.id}
-            )
-            # Safely trigger alumni email
-            if student.email:
-                send_alumni_invitation_email(student.email, student.first_name)
-
+    user = User.query.filter_by(student_id=student_id).first()
+    if user:
+        user.password_hash = generate_password_hash(new_password)
         db.session.commit()
-        return jsonify({
-            "status": "success",
-            "archived_alumni_count": len(graduating_students)
-        }), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-# --- CALL HOME LOG ROUTE ---
-@app.route('/api/students/<int:student_id>/call-home', methods=['POST'])
-def log_call_home(student_id):
-    data = request.json or {}
-    try:
-        db.session.execute("""
-            INSERT INTO contact_logs (student_id, logged_by, reason, notes, parent_contacted)
-            VALUES (:student_id, :logged_by, :reason, :notes, :parent_contacted)
-        """, {
-            'student_id': student_id,
-            'logged_by': data.get('logged_by', 'Director'),
-            'reason': data.get('reason', 'General'),
-            'notes': data.get('notes', ''),
-            'parent_contacted': data.get('parent_contacted', '')
-        })
-        db.session.commit()
-        return jsonify({"message": "Call home record saved."}), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": True, "message": f"Password reset to '{new_password}' for student ID {student_id}"})
+    return jsonify({"success": False, "message": "Student user account not found."}), 404
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=5000)
