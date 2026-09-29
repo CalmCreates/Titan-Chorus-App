@@ -70,18 +70,16 @@ export default function App() {
   // Director View Switcher
   const [viewAsStudentMode, setViewAsStudentMode] = useState(false);
 
-  // Audio Instrument Selector & Octave State
+  // Audio Instrument & Metronome
   const [audioInstrument, setAudioInstrument] = useState('pitch_pipe');
   const [octaveOffset, setOctaveOffset] = useState(0);
   const [activePitch, setActivePitch] = useState(null);
-
-  // Metronome State
   const [bpm, setBpm] = useState(100);
   const [isPlayingMetronome, setIsPlayingMetronome] = useState(false);
   const audioCtxRef = useRef(null);
   const metronomeTimerRef = useRef(null);
 
-  // Roster & Riser State
+  // Master Roster & Risers
   const [students, setStudents] = useState([]);
   const [ensembles, setEnsembles] = useState([]);
   const [filterEnsemble, setFilterEnsemble] = useState('All');
@@ -253,25 +251,15 @@ export default function App() {
   const fetchEnsembles = async () => {
     try {
       const res = await fetch(`${API_BASE}/ensembles`);
-      if (res.ok) {
-        const data = await res.json();
-        setEnsembles(data);
-      }
-    } catch (e) {
-      console.error('Error fetching ensembles:', e);
-    }
+      if (res.ok) setEnsembles(await res.json());
+    } catch (e) { console.error('Error fetching ensembles:', e); }
   };
 
   const fetchStudents = async () => {
     try {
       const res = await fetch(`${API_BASE}/students`);
-      if (res.ok) {
-        const data = await res.json();
-        setStudents(data);
-      }
-    } catch (e) {
-      console.error('Error fetching roster:', e);
-    }
+      if (res.ok) setStudents(await res.json());
+    } catch (e) { console.error('Error fetching roster:', e); }
   };
 
   const fetchFvaTerms = async () => {
@@ -279,13 +267,9 @@ export default function App() {
       const res = await fetch(`${API_BASE}/fva-terms`);
       if (res.ok) {
         const data = await res.json();
-        if (data && data.length > 0) {
-          setFvaTerms(data);
-        }
+        if (data && data.length > 0) setFvaTerms(data);
       }
-    } catch (e) {
-      console.error('Error fetching FVA terms:', e);
-    }
+    } catch (e) { console.error('Error fetching FVA terms:', e); }
   };
 
   const handleLogin = async (e) => {
@@ -309,7 +293,121 @@ export default function App() {
     }
   };
 
-  // GENERATIVE SIGHT SINGING MELODY (8 MEASURES)
+  // EAR TRAINING PLAYBACK (MELODIC 1.5s DELAY THEN HARMONIC)
+  const generateEarQuestion = () => {
+    setEarFeedback('');
+    const baseFreq = 261.63; // C4
+    if (earModule === 'intervals') {
+      const intervals = [
+        { name: 'Unison', semitones: 0 },
+        { name: 'Minor 2nd', semitones: 1 },
+        { name: 'Major 2nd', semitones: 2 },
+        { name: 'Minor 3rd', semitones: 3 },
+        { name: 'Major 3rd', semitones: 4 },
+        { name: 'Perfect 4th', semitones: 5 },
+        { name: 'Tritone', semitones: 6 },
+        { name: 'Perfect 5th', semitones: 7 },
+        { name: 'Minor 6th', semitones: 8 },
+        { name: 'Major 6th', semitones: 9 },
+        { name: 'Minor 7th', semitones: 10 },
+        { name: 'Major 7th', semitones: 11 },
+        { name: 'Octave', semitones: 12 }
+      ];
+      const picked = intervals[Math.floor(Math.random() * intervals.length)];
+      const freq2 = baseFreq * Math.pow(2, picked.semitones / 12);
+      setEarQuestion({ answer: picked.name, freq1: baseFreq, freq2 });
+      playIntervalMelodicThenHarmonic(baseFreq, freq2);
+    } else {
+      const chords = [
+        { name: 'Major Triad', ratios: [0, 4, 7] },
+        { name: 'Minor Triad', ratios: [0, 3, 7] },
+        { name: 'Augmented Triad', ratios: [0, 4, 8] },
+        { name: 'Diminished Triad', ratios: [0, 3, 6] }
+      ];
+      const picked = chords[Math.floor(Math.random() * chords.length)];
+      const freqs = picked.ratios.map(r => baseFreq * Math.pow(2, r / 12));
+      setEarQuestion({ answer: picked.name, freqs });
+      playChordMelodicThenHarmonic(freqs);
+    }
+  };
+
+  const playIntervalMelodicThenHarmonic = (f1, f2) => {
+    try {
+      const ctx = getAudioContext();
+      
+      // Note 1 (Melodic)
+      const osc1 = ctx.createOscillator();
+      const g1 = ctx.createGain();
+      osc1.frequency.setValueAtTime(f1, ctx.currentTime);
+      g1.gain.setValueAtTime(0.3, ctx.currentTime);
+      g1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+      osc1.connect(g1); g1.connect(ctx.destination);
+      osc1.start(ctx.currentTime); osc1.stop(ctx.currentTime + 1.2);
+
+      // Note 2 (1.5s Later)
+      const osc2 = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      osc2.frequency.setValueAtTime(f2, ctx.currentTime + 1.5);
+      g2.gain.setValueAtTime(0.3, ctx.currentTime + 1.5);
+      g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.7);
+      osc2.connect(g2); g2.connect(ctx.destination);
+      osc2.start(ctx.currentTime + 1.5); osc2.stop(ctx.currentTime + 2.7);
+
+      // Both Together Harmonically (3.0s Later)
+      const hOsc1 = ctx.createOscillator();
+      const hOsc2 = ctx.createOscillator();
+      const hG = ctx.createGain();
+      hOsc1.frequency.setValueAtTime(f1, ctx.currentTime + 3.0);
+      hOsc2.frequency.setValueAtTime(f2, ctx.currentTime + 3.0);
+      hG.gain.setValueAtTime(0.25, ctx.currentTime + 3.0);
+      hG.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 4.5);
+      hOsc1.connect(hG); hOsc2.connect(hG); hG.connect(ctx.destination);
+      hOsc1.start(ctx.currentTime + 3.0); hOsc1.stop(ctx.currentTime + 4.5);
+      hOsc2.start(ctx.currentTime + 3.0); hOsc2.stop(ctx.currentTime + 4.5);
+
+    } catch (e) { console.error('Audio Error:', e); }
+  };
+
+  const playChordMelodicThenHarmonic = (freqs) => {
+    try {
+      const ctx = getAudioContext();
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        const t = ctx.currentTime + (idx * 0.5);
+        osc.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(0.3, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(t); osc.stop(t + 0.8);
+      });
+
+      // Harmonic Triad Playback
+      freqs.forEach((freq) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        const t = ctx.currentTime + 2.2;
+        osc.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(0.2, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(t); osc.stop(t + 1.8);
+      });
+    } catch (e) { console.error('Chord Audio Error:', e); }
+  };
+
+  const handleAnswerEarQuestion = (userChoice) => {
+    if (!earQuestion) return;
+    if (userChoice === earQuestion.answer) {
+      setEarFeedback('✓ Correct!');
+      if (earMode === 'test') setEarScore(prev => ({ correct: prev.correct + 1, total: prev.total + 1 }));
+    } else {
+      setEarFeedback(`❌ Incorrect. Answer was: ${earQuestion.answer}`);
+      if (earMode === 'test') setEarScore(prev => ({ ...prev, total: prev.total + 1 }));
+    }
+  };
+
+  // GENERATIVE SIGHT SINGING MELODY
   const generateSightMelody = () => {
     setFinalSightScore(null);
     setCurrentNoteIdx(0);
@@ -320,14 +418,14 @@ export default function App() {
     const solfeges = ['do', 're', 'mi', 'fa', 'sol', 'la', 'ti', 'do'];
     const melody = [];
 
-    let lastIdx = 0; // Always start on Tonic
+    let lastIdx = 0;
     melody.push({ note: scale[lastIdx], solfege: solfeges[lastIdx], freq: NOTE_FREQS[scale[lastIdx]] });
 
     for (let i = 1; i < 8; i++) {
       let step = 0;
       if (sightLevel === 1) step = Math.random() > 0.5 ? 1 : -1;
       else if (sightLevel === 2) step = Math.floor(Math.random() * 3) - 1;
-      else if (sightLevel === 3) step = Math.floor(Math.random() * 3) - 1; // 6/8 meter
+      else if (sightLevel === 3) step = Math.floor(Math.random() * 3) - 1;
       else if (sightLevel === 4) step = Math.floor(Math.random() * 5) - 2;
       else step = Math.floor(Math.random() * 7) - 3;
 
@@ -339,9 +437,7 @@ export default function App() {
   };
 
   const playSightTonic = () => {
-    if (sightMelody.length > 0) {
-      playFrequency(sightMelody[0].freq, sightMelody[0].note);
-    }
+    if (sightMelody.length > 0) playFrequency(sightMelody[0].freq, sightMelody[0].note);
   };
 
   const startSightAssessment = async () => {
@@ -381,9 +477,7 @@ export default function App() {
 
       const stepTimer = setInterval(() => {
         step++;
-        if (step < sightMelody.length) {
-          setCurrentNoteIdx(step);
-        }
+        if (step < sightMelody.length) setCurrentNoteIdx(step);
       }, noteDuration);
 
       const sampleLoop = () => {
@@ -410,9 +504,7 @@ export default function App() {
           setIsPitchCorrect(null);
         }
 
-        if (isAssessingSight) {
-          requestAnimationFrame(sampleLoop);
-        }
+        if (isAssessingSight) requestAnimationFrame(sampleLoop);
       };
 
       requestAnimationFrame(sampleLoop);
@@ -463,6 +555,18 @@ export default function App() {
     }
 
     return sampleRate / maxpos;
+  };
+
+  const handleSaveUniformChecklist = async (updatedState) => {
+    setStudentUniforms(updatedState);
+    try {
+      await fetch(`${API_BASE}/students/uniform`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: currentUser.student_id, ...updatedState })
+      });
+      fetchStudents();
+    } catch (e) { console.error('Error updating uniform:', e); }
   };
 
   // LOGIN SCREEN
@@ -531,16 +635,14 @@ export default function App() {
       <div className="flex flex-wrap justify-between items-center gap-4 mb-4 border-b border-slate-800 pb-3">
         <div>
           <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider">🎹 Rehearsal Pitch & Metronome Tools</h3>
-          <p className="text-xs text-slate-400">Toggle between Pitch Buttons and Visual Piano (B3-C5 with Enharmonics)</p>
+          <p className="text-xs text-slate-400">Toggle between Pitch Pipe and Piano (B3-C5)</p>
         </div>
 
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setAudioInstrument('pitch_pipe')}
             className={`px-3 py-1.5 rounded text-xs font-bold transition border ${
-              audioInstrument === 'pitch_pipe'
-                ? 'bg-teal-600 text-white border-teal-400'
-                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+              audioInstrument === 'pitch_pipe' ? 'bg-teal-600 text-white border-teal-400' : 'bg-slate-800 text-slate-400 border-slate-700'
             }`}
           >
             🎵 Pitch Pipe
@@ -548,12 +650,10 @@ export default function App() {
           <button
             onClick={() => setAudioInstrument('piano')}
             className={`px-3 py-1.5 rounded text-xs font-bold transition border ${
-              audioInstrument === 'piano'
-                ? 'bg-teal-600 text-white border-teal-400'
-                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+              audioInstrument === 'piano' ? 'bg-teal-600 text-white border-teal-400' : 'bg-slate-800 text-slate-400 border-slate-700'
             }`}
           >
-            🎹 Visual Keyboard (B3–C5)
+            🎹 Keyboard (B3–C5)
           </button>
         </div>
       </div>
@@ -578,7 +678,7 @@ export default function App() {
           <button
             onClick={toggleMetronome}
             className={`w-full py-2 rounded font-bold text-xs transition mt-3 ${
-              isPlayingMetronome ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-teal-600 hover:bg-teal-500 text-white'
+              isPlayingMetronome ? 'bg-red-600 text-white' : 'bg-teal-600 text-white'
             }`}
           >
             {isPlayingMetronome ? '⏹ Stop' : '▶ Start'}
@@ -588,7 +688,7 @@ export default function App() {
         <div className="md:col-span-2 bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
           <div className="flex justify-between items-center mb-3">
             <h4 className="text-xs font-bold text-teal-300 uppercase">
-              {audioInstrument === 'pitch_pipe' ? '🎵 Chromatic Pitch Pipe' : '🎹 Visual Keyboard (B3–C5)'}
+              {audioInstrument === 'pitch_pipe' ? '🎵 Chromatic Pitch Pipe' : '🎹 Rehearsal Keyboard (B3–C5)'}
             </h4>
 
             <div className="flex items-center space-x-1">
@@ -598,9 +698,7 @@ export default function App() {
                   key={off}
                   onClick={() => setOctaveOffset(off)}
                   className={`px-2 py-0.5 rounded text-[10px] font-bold transition border ${
-                    octaveOffset === off
-                      ? 'bg-amber-500 text-slate-950 border-white'
-                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                    octaveOffset === off ? 'bg-amber-500 text-slate-950 border-white' : 'bg-slate-800 text-slate-400 border-slate-700'
                   }`}
                 >
                   {off === 0 ? 'Std' : off > 0 ? `+${off}` : off}
@@ -616,9 +714,7 @@ export default function App() {
                   key={p.note}
                   onClick={() => playFrequency(p.freq, p.note)}
                   className={`py-3 rounded font-mono font-bold text-xs transition border flex flex-col items-center justify-center ${
-                    activePitch === p.note
-                      ? 'bg-teal-500 text-slate-950 border-white scale-105 shadow-lg'
-                      : 'bg-slate-900 text-slate-200 border-slate-800 hover:border-teal-400'
+                    activePitch === p.note ? 'bg-teal-500 text-slate-950 border-white' : 'bg-slate-900 text-slate-200 border-slate-800'
                   }`}
                 >
                   <span>{p.note}</span>
@@ -634,7 +730,7 @@ export default function App() {
                     <button
                       key={wk.note}
                       onClick={() => playFrequency(wk.freq, wk.note)}
-                      className={`flex-1 h-full bg-slate-100 hover:bg-white text-slate-900 border border-slate-400 rounded-b flex flex-col justify-end items-center pb-2 transition shadow-inner ${
+                      className={`flex-1 h-full bg-slate-100 text-slate-900 border border-slate-400 rounded-b flex flex-col justify-end items-center pb-2 transition shadow-inner ${
                         activePitch === wk.note ? '!bg-amber-400 ring-2 ring-amber-300' : ''
                       }`}
                     >
@@ -647,7 +743,7 @@ export default function App() {
                       key={bk.note}
                       onClick={() => playFrequency(bk.freq, bk.note)}
                       style={{ left: bk.leftPos }}
-                      className={`absolute top-0 w-[10%] h-[60%] bg-slate-950 hover:bg-slate-800 text-teal-300 border border-slate-700 rounded-b flex flex-col justify-end items-center pb-1 transition z-20 shadow-2xl ${
+                      className={`absolute top-0 w-[10%] h-[60%] bg-slate-950 text-teal-300 border border-slate-700 rounded-b flex flex-col justify-end items-center pb-1 transition z-20 shadow-2xl ${
                         activePitch === bk.note ? '!bg-amber-500 text-slate-950 ring-2 ring-amber-300' : ''
                       }`}
                     >
@@ -663,12 +759,184 @@ export default function App() {
     </div>
   );
 
-  // SIGHT SINGING ENGINE TAB RENDERER
-  const renderSightSingingEngine = () => (
+  // FVA VOCABULARY TAB RENDERER
+  const renderFvaTab = () => {
+    const rawList = (fvaTerms && fvaTerms.length > 0) ? fvaTerms : DEFAULT_FVA_TERMS;
+    const categories = ['All', 'Music Terms', 'Form', 'Style and Phrasing', 'Tempo and Meter'];
+    const filteredList = selectedCategory === 'All' ? rawList : rawList.filter(t => t.category === selectedCategory);
+    const safeList = filteredList.length > 0 ? filteredList : rawList;
+    const currentTerm = safeList[termIndex % safeList.length];
+
+    return (
+      <div className="space-y-6 max-w-2xl mx-auto">
+        <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl space-y-4 text-center">
+          <h3 className="text-xl font-bold text-teal-400">🎵 FVA All-State Vocabulary (50 Terms)</h3>
+          
+          <div className="flex flex-wrap justify-center items-center gap-2">
+            <button
+              onClick={() => { setFvaDisplayMode('category'); setTermIndex(0); }}
+              className={`px-3 py-1 rounded text-xs font-bold border transition ${
+                fvaDisplayMode === 'category' ? 'bg-teal-600 text-white border-teal-400' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              📂 Grouped by Category
+            </button>
+            <button
+              onClick={() => { setFvaDisplayMode('random'); setTermIndex(Math.floor(Math.random() * rawList.length)); }}
+              className={`px-3 py-1 rounded text-xs font-bold border transition ${
+                fvaDisplayMode === 'random' ? 'bg-teal-600 text-white border-teal-400' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              🔀 Random Shuffle Mode
+            </button>
+          </div>
+
+          {fvaDisplayMode === 'category' && (
+            <div className="flex flex-wrap justify-center gap-1.5 pt-2">
+              {categories.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => { setSelectedCategory(cat); setTermIndex(0); setShowAnswer(false); }}
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold transition border ${
+                    selectedCategory === cat ? 'bg-amber-500 text-slate-950 border-white' : 'bg-slate-800 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div
+            onClick={() => setShowAnswer(!showAnswer)}
+            className="my-4 p-8 bg-slate-950 border border-slate-800 hover:border-teal-500/60 rounded-xl cursor-pointer transition min-h-[170px] flex flex-col justify-center items-center shadow-xl"
+          >
+            <span className="text-[10px] uppercase font-bold text-teal-400 tracking-wider mb-2">
+              #{currentTerm.num} • {currentTerm.category}
+            </span>
+            <h4 className="text-2xl font-bold text-slate-100">{currentTerm.term}</h4>
+            {showAnswer ? (
+              <p className="text-teal-300 mt-4 text-sm font-medium leading-relaxed max-w-lg">{currentTerm.definition}</p>
+            ) : (
+              <p className="text-xs text-slate-500 mt-4">Click card to reveal definition</p>
+            )}
+          </div>
+
+          <div className="flex justify-between items-center text-xs text-slate-400">
+            <button
+              disabled={termIndex === 0}
+              onClick={() => { setShowAnswer(false); setTermIndex(prev => Math.max(0, prev - 1)); }}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded font-semibold text-white"
+            >
+              ← Previous
+            </button>
+
+            <span>Card {(termIndex % safeList.length) + 1} of {safeList.length}</span>
+
+            <button
+              onClick={() => {
+                setShowAnswer(false);
+                if (fvaDisplayMode === 'random') setTermIndex(Math.floor(Math.random() * rawList.length));
+                else setTermIndex(prev => (prev + 1) % safeList.length);
+              }}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded font-semibold text-white"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // EAR TRAINING TAB RENDERER
+  const renderEarTrainingTab = () => (
+    <div className="space-y-6 max-w-2xl mx-auto">
+      <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl space-y-4">
+        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+          <h3 className="text-lg font-bold text-teal-400">🎧 Ear Training (Intervals & Chord Qualities)</h3>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => { setEarMode('practice'); setEarScore({ correct: 0, total: 0 }); }}
+              className={`px-3 py-1 rounded text-xs font-bold transition border ${
+                earMode === 'practice' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              Practice
+            </button>
+            <button
+              onClick={() => { setEarMode('test'); setEarScore({ correct: 0, total: 0 }); }}
+              className={`px-3 py-1 rounded text-xs font-bold transition border ${
+                earMode === 'test' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              Test
+            </button>
+          </div>
+        </div>
+
+        <div className="flex space-x-2">
+          <button
+            onClick={() => setEarModule('intervals')}
+            className={`px-3 py-1.5 rounded text-xs font-bold flex-1 border ${
+              earModule === 'intervals' ? 'bg-amber-500 text-slate-950 border-white' : 'bg-slate-800 text-slate-300'
+            }`}
+          >
+            Intervals
+          </button>
+          <button
+            onClick={() => setEarModule('chords')}
+            className={`px-3 py-1.5 rounded text-xs font-bold flex-1 border ${
+              earModule === 'chords' ? 'bg-amber-500 text-slate-950 border-white' : 'bg-slate-800 text-slate-300'
+            }`}
+          >
+            Chord Qualities
+          </button>
+        </div>
+
+        {earMode === 'test' && (
+          <div className="bg-slate-950 p-3 rounded-lg text-center text-xs text-teal-300 font-bold border border-slate-800">
+            Test Score: {earScore.correct} / {earScore.total} ({earScore.total > 0 ? Math.round((earScore.correct / earScore.total) * 100) : 0}%)
+          </div>
+        )}
+
+        <button
+          onClick={generateEarQuestion}
+          className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 rounded-lg text-sm transition shadow-lg"
+        >
+          ▶ Play Audio (Melodic $\rightarrow$ 1.5s Pause $\rightarrow$ Harmonic)
+        </button>
+
+        {earFeedback && (
+          <p className={`text-center font-bold text-sm ${earFeedback.includes('Correct') ? 'text-emerald-400' : 'text-red-400'}`}>
+            {earFeedback}
+          </p>
+        )}
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2">
+          {(earModule === 'intervals'
+            ? ['Unison', 'Minor 2nd', 'Major 2nd', 'Minor 3rd', 'Major 3rd', 'Perfect 4th', 'Tritone', 'Perfect 5th', 'Minor 6th', 'Major 6th', 'Minor 7th', 'Major 7th', 'Octave']
+            : ['Major Triad', 'Minor Triad', 'Augmented Triad', 'Diminished Triad']
+          ).map((item) => (
+            <button
+              key={item}
+              onClick={() => handleAnswerEarQuestion(item)}
+              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold py-2.5 px-2 rounded text-xs transition"
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // REAL MUSICAL STAFF SIGHT-SINGING RENDERER
+  const renderSightSingingStaff = () => (
     <div className="space-y-6 max-w-3xl mx-auto">
       <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-3">
-          <h3 className="text-lg font-bold text-teal-400">🎼 FVA All-State Sight-Singing Grader</h3>
+          <h3 className="text-lg font-bold text-teal-400">🎼 FVA 8-Measure Sight-Singing Staff</h3>
           
           <div className="flex flex-wrap gap-2 text-xs">
             <select
@@ -676,8 +944,8 @@ export default function App() {
               onChange={(e) => setSightClef(e.target.value)}
               className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-white font-bold"
             >
-              <option value="treble">🎼 Treble</option>
-              <option value="bass">𝄢 Bass</option>
+              <option value="treble">🎼 Treble Clef</option>
+              <option value="bass">𝄢 Bass Clef</option>
             </select>
 
             <select
@@ -704,7 +972,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* NOTATION CANVAS DISPLAY */}
+        {/* 5-LINE MUSICAL STAFF SVG */}
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
           <div className="flex justify-between items-center text-xs font-mono">
             <span className="text-teal-300 font-bold">
@@ -713,14 +981,49 @@ export default function App() {
             <span className="text-amber-400 font-bold">{statusText}</span>
           </div>
 
-          <div className="py-6 border-y border-slate-800 flex justify-around items-center min-h-[120px] overflow-x-auto">
-            {sightMelody.map((n, idx) => (
-              <div key={idx} className="flex flex-col items-center px-1">
-                <span className={`text-2xl font-extrabold ${idx === currentNoteIdx && isAssessingSight ? 'text-amber-400 scale-125' : 'text-white'}`}>♩</span>
-                <span className="text-[10px] font-mono font-bold text-teal-300">{n.solfege}</span>
-                <span className="text-[9px] font-mono text-slate-500">{n.note}</span>
-              </div>
-            ))}
+          <div className="overflow-x-auto py-2">
+            <svg viewBox="0 0 850 160" className="w-full min-w-[700px] h-40 bg-slate-900/90 rounded border border-slate-800">
+              {/* 5 Staff Lines */}
+              {[40, 56, 72, 88, 104].map((y) => (
+                <line key={y} x1="10" y1={y} x2="840" y2={y} stroke="#475569" strokeWidth="1.5" />
+              ))}
+
+              {/* Clef Header Symbol */}
+              <text x="20" y={sightClef === 'treble' ? "95" : "85"} fill="#2dd4bf" fontSize="46">
+                {sightClef === 'treble' ? '🎼' : '𝄢'}
+              </text>
+
+              {/* Notes & Bar Lines */}
+              {sightMelody.map((n, idx) => {
+                const x = 90 + (idx * 90);
+                const y = 110 - (idx * 6);
+                const isCurrent = idx === currentNoteIdx && isAssessingSight;
+
+                return (
+                  <g key={idx}>
+                    {/* Note Head */}
+                    <ellipse
+                      cx={x}
+                      cy={y}
+                      rx="6.5"
+                      ry="5"
+                      fill={isCurrent ? "#f59e0b" : "#f8fafc"}
+                      transform={`rotate(-20 ${x} ${y})`}
+                    />
+                    {/* Stem */}
+                    <line x1={x + 5} y1={y} x2={x + 5} y2={y - 28} stroke="#f8fafc" strokeWidth="1.5" />
+                    {/* Solfege Label */}
+                    <text x={x - 8} y="145" fill="#2dd4bf" fontSize="11" fontWeight="bold">
+                      {n.solfege}
+                    </text>
+                    {/* Bar Line */}
+                    {idx > 0 && idx % 2 === 0 && (
+                      <line x1={x - 20} y1="40" x2={x - 20} y2="104" stroke="#64748b" strokeWidth="1.5" />
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
           </div>
 
           <div className="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-800 text-xs">
@@ -990,7 +1293,7 @@ export default function App() {
 
       {renderAudioToolbar()}
 
-      {/* NAVIGATION TABS */}
+      {/* TABS NAVIGATION BAR */}
       <div className="flex flex-wrap gap-2 border-b border-teal-900/60 pb-3 mb-6">
         <button
           onClick={() => setActiveTab('overview')}
@@ -1017,12 +1320,20 @@ export default function App() {
           🎵 FVA Vocabulary
         </button>
         <button
+          onClick={() => setActiveTab('ear')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
+            activeTab === 'ear' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          🎧 Ear Training
+        </button>
+        <button
           onClick={() => setActiveTab('sight')}
           className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
             activeTab === 'sight' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-200'
           }`}
         >
-          🎼 Sight-Singing Hub
+          🎼 Sight-Singing Staff
         </button>
       </div>
 
@@ -1041,7 +1352,96 @@ export default function App() {
         </div>
       )}
 
-      {activeTab === 'sight' && renderSightSingingEngine()}
+      {activeTab === 'uniform' && (
+        <div className="space-y-6 max-w-2xl mx-auto">
+          <div className="bg-amber-950/40 border border-amber-600/60 p-4 rounded-xl text-xs text-amber-200 leading-relaxed space-y-2">
+            <p className="font-bold text-amber-300 text-sm">⚠️ UNIFORM CARE & CONCERT DAY GUIDELINES</p>
+            <p>
+              Please ensure your name is written <strong>LEGIBLY</strong> on your string backpack and that your choir uniforms are placed inside, neatly folded, on concert days.
+            </p>
+            <p>
+              You may leave your bag hanging on a rack or in a designated practice room. <strong>Do not leave money or valuables in your bag unattended.</strong>
+            </p>
+            <p className="italic text-amber-400">
+              Uniforms are a privilege and must be treated with care, kept clean, and laundered properly.
+            </p>
+          </div>
+
+          <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl space-y-4">
+            <h3 className="text-lg font-bold text-teal-400">Olympia HS Issued Items Checklist</h3>
+            <div className="space-y-3 pt-2">
+              <div className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800">
+                <label className="flex items-center space-x-3 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={studentUniforms.uniform_tshirt}
+                    disabled={studentUniforms.uniform_tshirt && !isDirector}
+                    onChange={(e) => handleSaveUniformChecklist({ ...studentUniforms, uniform_tshirt: e.target.checked })}
+                    className="w-4 h-4 accent-teal-500 rounded"
+                  />
+                  <span className="font-semibold text-white">Choir T-Shirt</span>
+                </label>
+                <select
+                  value={studentUniforms.uniform_tshirt_size}
+                  disabled={studentUniforms.uniform_tshirt && !isDirector}
+                  onChange={(e) => handleSaveUniformChecklist({ ...studentUniforms, uniform_tshirt_size: e.target.value })}
+                  className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white"
+                >
+                  {sizes.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800">
+                <label className="flex items-center space-x-3 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={studentUniforms.uniform_polo}
+                    disabled={studentUniforms.uniform_polo && !isDirector}
+                    onChange={(e) => handleSaveUniformChecklist({ ...studentUniforms, uniform_polo: e.target.checked })}
+                    className="w-4 h-4 accent-teal-500 rounded"
+                  />
+                  <span className="font-semibold text-white">Choir Black Polo</span>
+                </label>
+                <select
+                  value={studentUniforms.uniform_polo_size}
+                  disabled={studentUniforms.uniform_polo && !isDirector}
+                  onChange={(e) => handleSaveUniformChecklist({ ...studentUniforms, uniform_polo_size: e.target.value })}
+                  className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white"
+                >
+                  {sizes.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              {[
+                { key: 'uniform_dress', label: 'Choir Dress' },
+                { key: 'uniform_jacket', label: 'Choir Jacket' },
+                { key: 'uniform_silver_tie', label: 'Silver Tie' },
+                { key: 'uniform_teal_tie', label: 'Teal Tie' },
+                { key: 'uniform_red_tie', label: 'Red Tie' },
+                { key: 'uniform_white_tie', label: 'White Tie' },
+                { key: 'uniform_backpack', label: 'Choir String Backpack' }
+              ].map((item) => (
+                <div key={item.key} className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800">
+                  <label className="flex items-center space-x-3 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={studentUniforms[item.key]}
+                      disabled={studentUniforms[item.key] && !isDirector}
+                      onChange={(e) => handleSaveUniformChecklist({ ...studentUniforms, [item.key]: e.target.checked })}
+                      className="w-4 h-4 accent-teal-500 rounded"
+                    />
+                    <span className="font-semibold text-white">{item.label}</span>
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'fva' && renderFvaTab()}
+      {activeTab === 'ear' && renderEarTrainingTab()}
+      {activeTab === 'sight' && renderSightSingingStaff()}
     </div>
   );
 }
