@@ -216,9 +216,7 @@ export default function App() {
             </button>
           </form>
 
-          <div className="mt-6 text-xs text-slate-500 text-center">
-            <p>Default Director Login: ID <code className="text-amber-400">ADMIN</code> / Password <code className="text-amber-400">titan2026</code></p>
-          </div>
+         
         </div>
       </div>
     );
