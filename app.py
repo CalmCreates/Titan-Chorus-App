@@ -39,24 +39,44 @@ class Student(db.Model):
     ensemble = db.Column(db.String(100), nullable=False)
     additional_ensembles = db.Column(db.String(200), nullable=True, default='')
     voice_part = db.Column(db.String(20), nullable=False)
-    height_inches = db.Column(db.Integer, nullable=True, default=65) # Saved strictly in total inches
+    height_inches = db.Column(db.Integer, nullable=True, default=65)
     wenger_section = db.Column(db.String(20), nullable=True, default='Riser A')
     wenger_row = db.Column(db.String(20), nullable=True, default='Row 1')
     wenger_slot = db.Column(db.String(20), nullable=True, default='Far Left')
     dues_paid = db.Column(db.Boolean, default=False)
     paperwork_complete = db.Column(db.Boolean, default=False)
+    
+    # Uniform Assignment Tracking (JSON String or individual flags)
+    uniform_tshirt = db.Column(db.Boolean, default=False)
+    uniform_tshirt_size = db.Column(db.String(10), nullable=True, default='M')
+    uniform_polo = db.Column(db.Boolean, default=False)
+    uniform_polo_size = db.Column(db.String(10), nullable=True, default='M')
+    uniform_dress = db.Column(db.Boolean, default=False)
+    uniform_jacket = db.Column(db.Boolean, default=False)
+    uniform_silver_tie = db.Column(db.Boolean, default=False)
+    uniform_teal_tie = db.Column(db.Boolean, default=False)
+    uniform_red_tie = db.Column(db.Boolean, default=False)
+    uniform_white_tie = db.Column(db.Boolean, default=False)
+    uniform_backpack = db.Column(db.Boolean, default=False)
+    uniform_other = db.Column(db.String(100), nullable=True, default='')
+    uniform_other_checked = db.Column(db.Boolean, default=False)
 
 # Safe Database Initialization
 with app.app_context():
     db.create_all()
-    if not User.query.filter_by(student_id='ADMIN').first():
+    
+    # Create or Update Director Cesar Lengua-Miranda Account
+    admin = User.query.filter_by(student_id='ADMIN').first()
+    if not admin:
         admin = User(
             student_id='ADMIN',
-            name='Chorus Director',
+            name='Cesar Lengua-Miranda',
             password_hash=generate_password_hash('titan2026'),
             role='director'
         )
         db.session.add(admin)
+    else:
+        admin.name = 'Cesar Lengua-Miranda'
 
     if Ensemble.query.count() == 0:
         defaults = ['Concert Chorus', 'Bel Canto', 'Titan A Cappella', 'Treble Chorus']
@@ -90,6 +110,7 @@ def root_status():
     return jsonify({
         "status": "Online",
         "program": "Olympia High School Titan Chorus Hub",
+        "director": "Cesar Lengua-Miranda",
         "motto": "We Strive to Touch Lives!"
     })
 
@@ -113,30 +134,6 @@ def get_ensembles():
     items = Ensemble.query.all()
     return jsonify([e.name for e in items])
 
-@app.route('/api/ensembles', methods=['POST'])
-def add_ensemble():
-    data = request.get_json() or {}
-    name = data.get('name', '').strip()
-    if name and not Ensemble.query.filter_by(name=name).first():
-        db.session.add(Ensemble(name=name))
-        db.session.commit()
-        return jsonify({"success": True, "message": f"Ensemble '{name}' added."})
-    return jsonify({"success": False, "message": "Ensemble already exists or invalid name."}), 400
-
-@app.route('/api/ensembles/rename', methods=['POST'])
-def rename_ensemble():
-    data = request.get_json() or {}
-    old_name = data.get('old_name')
-    new_name = data.get('new_name', '').strip()
-    
-    ens = Ensemble.query.filter_by(name=old_name).first()
-    if ens and new_name:
-        ens.name = new_name
-        Student.query.filter_by(ensemble=old_name).update({"ensemble": new_name})
-        db.session.commit()
-        return jsonify({"success": True})
-    return jsonify({"success": False}), 400
-
 @app.route('/api/students', methods=['GET'])
 def get_students():
     students = Student.query.all()
@@ -153,7 +150,20 @@ def get_students():
         "wenger_row": s.wenger_row or 'Row 1',
         "wenger_slot": s.wenger_slot or 'Far Left',
         "dues_paid": s.dues_paid,
-        "paperwork_complete": s.paperwork_complete
+        "paperwork_complete": s.paperwork_complete,
+        "uniform_tshirt": s.uniform_tshirt,
+        "uniform_tshirt_size": s.uniform_tshirt_size or 'M',
+        "uniform_polo": s.uniform_polo,
+        "uniform_polo_size": s.uniform_polo_size or 'M',
+        "uniform_dress": s.uniform_dress,
+        "uniform_jacket": s.uniform_jacket,
+        "uniform_silver_tie": s.uniform_silver_tie,
+        "uniform_teal_tie": s.uniform_teal_tie,
+        "uniform_red_tie": s.uniform_red_tie,
+        "uniform_white_tie": s.uniform_white_tie,
+        "uniform_backpack": s.uniform_backpack,
+        "uniform_other": s.uniform_other or '',
+        "uniform_other_checked": s.uniform_other_checked
     } for s in students])
 
 @app.route('/api/students', methods=['POST'])
@@ -169,9 +179,7 @@ def add_student():
         height_inches=int(data.get('height_inches', 65)),
         wenger_section=data.get('wenger_section', 'Riser A'),
         wenger_row=data.get('wenger_row', 'Row 1'),
-        wenger_slot=data.get('wenger_slot', 'Far Left'),
-        dues_paid=data.get('dues_paid', False),
-        paperwork_complete=data.get('paperwork_complete', False)
+        wenger_slot=data.get('wenger_slot', 'Far Left')
     )
     db.session.add(new_s)
     
@@ -189,60 +197,30 @@ def add_student():
     db.session.commit()
     return jsonify({"success": True, "message": "Student added successfully"})
 
-@app.route('/api/students/bulk', methods=['POST'])
-def bulk_add_students():
-    records = request.get_json() or []
-    added_count = 0
-    updated_count = 0
-
-    for item in records:
-        sid = str(item.get('student_id', '')).strip()
-        if not sid:
-            continue
-
-        existing = Student.query.filter_by(student_id=sid).first()
-        if existing:
-            existing.first_name = item.get('first_name', existing.first_name)
-            existing.last_name = item.get('last_name', existing.last_name)
-            existing.ensemble = item.get('ensemble', existing.ensemble)
-            existing.voice_part = item.get('voice_part', existing.voice_part)
-            existing.height_inches = int(item.get('height_inches', existing.height_inches or 65))
-            existing.wenger_section = item.get('wenger_section', existing.wenger_section)
-            existing.wenger_row = item.get('wenger_row', existing.wenger_row)
-            existing.wenger_slot = item.get('wenger_slot', existing.wenger_slot)
-            updated_count += 1
-        else:
-            s = Student(
-                student_id=sid,
-                first_name=item.get('first_name', 'Student'),
-                last_name=item.get('last_name', 'User'),
-                ensemble=item.get('ensemble', 'Concert Chorus'),
-                additional_ensembles=item.get('additional_ensembles', ''),
-                voice_part=item.get('voice_part', 'Soprano 1'),
-                height_inches=int(item.get('height_inches', 65)),
-                wenger_section=item.get('wenger_section', 'Riser A'),
-                wenger_row=item.get('wenger_row', 'Row 1'),
-                wenger_slot=item.get('wenger_slot', 'Far Left')
-            )
-            db.session.add(s)
-
-            if not User.query.filter_by(student_id=sid).first():
-                user = User(
-                    student_id=sid,
-                    name=f"{item.get('first_name', 'Student')} {item.get('last_name', 'User')}",
-                    password_hash=generate_password_hash('titan123'),
-                    role='student',
-                    ensemble=item.get('ensemble', 'Concert Chorus'),
-                    voice_part=item.get('voice_part', 'Soprano 1')
-                )
-                db.session.add(user)
-            added_count += 1
-
-    db.session.commit()
-    return jsonify({
-        "success": True,
-        "message": f"Processed {len(records)} records ({added_count} added, {updated_count} updated)."
-    })
+@app.route('/api/students/uniform', methods=['POST'])
+def update_student_uniform():
+    data = request.get_json() or {}
+    student_id = data.get('student_id')
+    student = Student.query.filter_by(student_id=student_id).first()
+    
+    if student:
+        student.uniform_tshirt = data.get('uniform_tshirt', student.uniform_tshirt)
+        student.uniform_tshirt_size = data.get('uniform_tshirt_size', student.uniform_tshirt_size)
+        student.uniform_polo = data.get('uniform_polo', student.uniform_polo)
+        student.uniform_polo_size = data.get('uniform_polo_size', student.uniform_polo_size)
+        student.uniform_dress = data.get('uniform_dress', student.uniform_dress)
+        student.uniform_jacket = data.get('uniform_jacket', student.uniform_jacket)
+        student.uniform_silver_tie = data.get('uniform_silver_tie', student.uniform_silver_tie)
+        student.uniform_teal_tie = data.get('uniform_teal_tie', student.uniform_teal_tie)
+        student.uniform_red_tie = data.get('uniform_red_tie', student.uniform_red_tie)
+        student.uniform_white_tie = data.get('uniform_white_tie', student.uniform_white_tie)
+        student.uniform_backpack = data.get('uniform_backpack', student.uniform_backpack)
+        student.uniform_other = data.get('uniform_other', student.uniform_other)
+        student.uniform_other_checked = data.get('uniform_other_checked', student.uniform_other_checked)
+        
+        db.session.commit()
+        return jsonify({"success": True, "message": "Uniform checklist updated."})
+    return jsonify({"success": False, "message": "Student record not found."}), 404
 
 @app.route('/api/students/<int:id>', methods=['PUT'])
 def update_student(id):
@@ -277,16 +255,6 @@ def delete_student(id):
 @app.route('/api/fva-terms', methods=['GET'])
 def get_fva_terms():
     return jsonify(FVA_TERMS)
-
-@app.route('/api/user/change-password', methods=['POST'])
-def change_password():
-    data = request.get_json() or {}
-    user = User.query.filter_by(student_id=data.get('student_id')).first()
-    if user and check_password_hash(user.password_hash, data.get('old_password', '')):
-        user.password_hash = generate_password_hash(data.get('new_password', ''))
-        db.session.commit()
-        return jsonify({"success": True, "message": "Password updated successfully!"})
-    return jsonify({"success": False, "message": "Incorrect current password."}), 400
 
 @app.route('/api/admin/reset-student-password', methods=['POST'])
 def reset_student_password():
