@@ -34,6 +34,11 @@ export default function App() {
   const [editingStudent, setEditingStudent] = useState(null);
   const [overflowEnabled, setOverflowEnabled] = useState(false);
 
+  // CSV Staging Area State
+  const [csvRawText, setCsvRawText] = useState('');
+  const [stagedStudents, setStagedStudents] = useState([]);
+  const [isImportingCsv, setIsImportingCsv] = useState(false);
+
   const baseRisers = ['Riser A', 'Riser B', 'Riser C', 'Riser D', 'Riser E', 'Riser F'];
   const activeRisers = overflowEnabled ? [...baseRisers, 'Riser G'] : baseRisers;
 
@@ -238,6 +243,60 @@ export default function App() {
       }
     } catch (err) {
       setErrorMsg('Connection error. Is backend online?');
+    }
+  };
+
+  const handleParseCsv = (e) => {
+    e.preventDefault();
+    if (!csvRawText.trim()) return;
+
+    const lines = csvRawText.trim().split('\n');
+    const parsed = [];
+
+    lines.forEach((line, idx) => {
+      if (idx === 0 && (line.toLowerCase().includes('id') || line.toLowerCase().includes('first'))) {
+        return;
+      }
+      const cols = line.split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
+      if (cols.length >= 3) {
+        parsed.push({
+          student_id: cols[0],
+          first_name: cols[1],
+          last_name: cols[2],
+          ensemble: ensembles[0] || 'Concert Chorus',
+          voice_part: 'Soprano 1',
+          wenger_section: 'Riser A',
+          wenger_row: 'Row 1',
+          wenger_slot: 'Far Left'
+        });
+      }
+    });
+
+    if (parsed.length > 0) {
+      setStagedStudents(parsed);
+    } else {
+      alert('Could not parse CSV. Ensure formatting is: Student_ID, First_Name, Last_Name');
+    }
+  };
+
+  const handleCommitBulkImport = async () => {
+    if (stagedStudents.length === 0) return;
+    try {
+      const res = await fetch(`${API_BASE}/students/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(stagedStudents)
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        setStagedStudents([]);
+        setCsvRawText('');
+        setIsImportingCsv(false);
+        fetchStudents();
+      }
+    } catch (err) {
+      alert('Failed to import bulk students.');
     }
   };
 
@@ -456,6 +515,118 @@ export default function App() {
           </button>
         </header>
 
+        {/* SKYWARD CSV BULK IMPORT MODULE */}
+        <section className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-bold text-teal-400">📊 Skyward / OCPS Bulk CSV Import</h2>
+              <p className="text-xs text-slate-400">Import student demographic lists directly from Skyward or Excel spreadsheets.</p>
+            </div>
+            <button
+              onClick={() => setIsImportingCsv(!isImportingCsv)}
+              className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2 rounded text-sm transition"
+            >
+              {isImportingCsv ? 'Close Importer' : '+ Bulk Upload Skyward CSV'}
+            </button>
+          </div>
+
+          {isImportingCsv && (
+            <div className="mt-4 pt-4 border-t border-slate-800 space-y-4">
+              {stagedStudents.length === 0 ? (
+                <form onSubmit={handleParseCsv} className="space-y-3">
+                  <p className="text-xs text-slate-300">
+                    Paste raw CSV lines below. Expected column format: <code className="text-teal-300 font-mono">Student_ID, First_Name, Last_Name</code>
+                  </p>
+                  <textarea
+                    rows="5"
+                    placeholder="480123456, Sarah, Jenkins&#10;480123457, Emily, Davis"
+                    value={csvRawText}
+                    onChange={(e) => setCsvRawText(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 p-3 rounded font-mono text-xs text-white"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-4 py-2 rounded text-xs"
+                  >
+                    Parse CSV into Staging Grid →
+                  </button>
+                </form>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-bold text-teal-300">
+                      Review & Assign Staged Records ({stagedStudents.length} Students)
+                    </h3>
+                    <div className="space-x-2">
+                      <button
+                        onClick={() => setStagedStudents([])}
+                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 rounded"
+                      >
+                        Clear Staging
+                      </button>
+                      <button
+                        onClick={handleCommitBulkImport}
+                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white rounded"
+                      >
+                        ✓ Commit All to Live Roster
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto border border-slate-800 rounded">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-950 text-slate-400 sticky top-0">
+                        <tr>
+                          <th className="p-2">ID</th>
+                          <th className="p-2">First Name</th>
+                          <th className="p-2">Last Name</th>
+                          <th className="p-2">Assigned Ensemble</th>
+                          <th className="p-2">Voice Part</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800 text-slate-200">
+                        {stagedStudents.map((stg, idx) => (
+                          <tr key={idx} className="hover:bg-slate-800/40">
+                            <td className="p-2 font-mono text-teal-400">{stg.student_id}</td>
+                            <td className="p-2">{stg.first_name}</td>
+                            <td className="p-2">{stg.last_name}</td>
+                            <td className="p-2">
+                              <select
+                                value={stg.ensemble}
+                                onChange={(e) => {
+                                  const updated = [...stagedStudents];
+                                  updated[idx].ensemble = e.target.value;
+                                  setStagedStudents(updated);
+                                }}
+                                className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white"
+                              >
+                                {ensembles.map(ens => <option key={ens} value={ens}>{ens}</option>)}
+                              </select>
+                            </td>
+                            <td className="p-2">
+                              <select
+                                value={stg.voice_part}
+                                onChange={(e) => {
+                                  const updated = [...stagedStudents];
+                                  updated[idx].voice_part = e.target.value;
+                                  setStagedStudents(updated);
+                                }}
+                                className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white"
+                              >
+                                {voiceParts.map(vp => <option key={vp} value={vp}>{vp}</option>)}
+                              </select>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
         {/* QUICK TOOLS & CALENDAR WIDGET ROW */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           {/* UPCOMING EVENTS */}
@@ -568,7 +739,7 @@ export default function App() {
                 <div key={rowName} className="flex items-center space-x-2">
                   <div className="w-32 text-right pr-3">
                     <span className="text-[11px] font-bold uppercase text-slate-400">
-                      {rowName === 'Row 1' ? 'Row 1 (Stage Floor)' : rowName}
+                      {rowName}
                     </span>
                   </div>
 
