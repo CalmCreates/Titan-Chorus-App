@@ -7,11 +7,17 @@ export default function App() {
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'fva' | 'security'
   
   // Student Password Change State
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [passChangeStatus, setPassChangeStatus] = useState({ type: '', msg: '' });
+
+  // FVA Practice Hub State
+  const [fvaTerms, setFvaTerms] = useState([]);
+  const [termIndex, setTermIndex] = useState(0);
+  const [showAnswer, setShowAnswer] = useState(false);
 
   // Director Roster Management State
   const [students, setStudents] = useState([]);
@@ -28,8 +34,11 @@ export default function App() {
   const voiceParts = ['Soprano 1', 'Soprano 2', 'Alto 1', 'Alto 2', 'Tenor 1', 'Tenor 2', 'Bass 1', 'Bass 2'];
 
   useEffect(() => {
-    if (currentUser && currentUser.role === 'director') {
-      fetchStudents();
+    if (currentUser) {
+      if (currentUser.role === 'director') {
+        fetchStudents();
+      }
+      fetchFvaTerms();
     }
   }, [currentUser]);
 
@@ -42,6 +51,18 @@ export default function App() {
       }
     } catch (e) {
       console.error('Error fetching roster:', e);
+    }
+  };
+
+  const fetchFvaTerms = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/fva-terms`);
+      if (res.ok) {
+        const data = await res.json();
+        setFvaTerms(data);
+      }
+    } catch (e) {
+      console.error('Error fetching FVA terms:', e);
     }
   };
 
@@ -97,7 +118,7 @@ export default function App() {
       `Reset password for ${studentName} (ID: ${studentId}).\nEnter new temporary password (or leave blank for 'titan123'):`,
       'titan123'
     );
-    if (customPass === null) return; // User cancelled
+    if (customPass === null) return;
 
     try {
       const res = await fetch(`${API_BASE}/admin/reset-student-password`, {
@@ -340,12 +361,14 @@ export default function App() {
   }
 
   // STUDENT PORTAL VIEW
+  const currentTerm = fvaTerms[termIndex];
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
       <header className="flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-amber-400">Titan Chorus Student Hub</h1>
-          <p className="text-xs text-slate-400">Welcome, {currentUser.name}</p>
+          <p className="text-xs text-slate-400">Welcome back, {currentUser.name}</p>
         </div>
         <button
           onClick={() => setCurrentUser(null)}
@@ -355,62 +378,142 @@ export default function App() {
         </button>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-          <h3 className="text-xs uppercase font-bold text-slate-400 mb-2">My Ensemble</h3>
-          <p className="text-2xl font-bold text-amber-400">{currentUser.ensemble}</p>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-          <h3 className="text-xs uppercase font-bold text-slate-400 mb-2">My Voice Part</h3>
-          <p className="text-2xl font-bold text-slate-200">{currentUser.voice_part}</p>
-        </div>
+      {/* NAVIGATION TABS */}
+      <div className="flex space-x-2 border-b border-slate-800 pb-3 mb-6">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+            activeTab === 'overview' ? 'bg-amber-500 text-slate-950' : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          My Profile
+        </button>
+        <button
+          onClick={() => setActiveTab('fva')}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+            activeTab === 'fva' ? 'bg-amber-500 text-slate-950' : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          🎵 FVA All-State Musicianship Hub
+        </button>
+        <button
+          onClick={() => setActiveTab('security')}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+            activeTab === 'security' ? 'bg-amber-500 text-slate-950' : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Security & Password
+        </button>
       </div>
 
-      {/* STUDENT SELF-SERVICE PASSWORD CHANGE */}
-      <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl max-w-md">
-        <h3 className="text-lg font-semibold text-slate-200 mb-2">Change My Password</h3>
-        <p className="text-xs text-slate-400 mb-4">
-          Default initial password is <code className="text-amber-400">titan123</code>. You can set a private password below.
-        </p>
-
-        <form onSubmit={handleChangePassword} className="space-y-3">
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Current Password</label>
-            <input
-              type="password"
-              required
-              value={oldPassword}
-              onChange={(e) => setOldPassword(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white focus:outline-none focus:border-amber-400"
-            />
+      {/* TAB 1: OVERVIEW */}
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+            <h3 className="text-xs uppercase font-bold text-slate-400 mb-2">My Ensemble</h3>
+            <p className="text-2xl font-bold text-amber-400">{currentUser.ensemble}</p>
           </div>
 
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">New Password</label>
-            <input
-              type="password"
-              required
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white focus:outline-none focus:border-amber-400"
-            />
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+            <h3 className="text-xs uppercase font-bold text-slate-400 mb-2">My Voice Part</h3>
+            <p className="text-2xl font-bold text-slate-200">{currentUser.voice_part}</p>
           </div>
+        </div>
+      )}
 
-          {passChangeStatus.msg && (
-            <p className={`text-xs ${passChangeStatus.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
-              {passChangeStatus.msg}
-            </p>
-          )}
+      {/* TAB 2: FVA MUSICIANSHIP HUB */}
+      {activeTab === 'fva' && (
+        <div className="space-y-6">
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl max-w-xl mx-auto text-center">
+            <span className="text-xs uppercase font-semibold text-amber-400 tracking-wider">
+              {currentTerm?.category || "FVA Vocabulary"}
+            </span>
+            
+            <div
+              onClick={() => setShowAnswer(!showAnswer)}
+              className="my-6 p-8 bg-slate-950 border border-slate-800 rounded-xl cursor-pointer hover:border-amber-500/50 transition min-h-[160px] flex flex-col justify-center items-center"
+            >
+              <h3 className="text-2xl font-bold text-slate-100">{currentTerm?.term}</h3>
+              {showAnswer ? (
+                <p className="text-amber-300 mt-4 text-sm font-medium leading-relaxed">{currentTerm?.definition}</p>
+              ) : (
+                <p className="text-xs text-slate-500 mt-4">Click to reveal definition</p>
+              )}
+            </div>
 
-          <button
-            type="submit"
-            className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2 rounded text-sm transition"
-          >
-            Update Password
-          </button>
-        </form>
-      </div>
+            <div className="flex justify-between items-center text-xs text-slate-400">
+              <button
+                disabled={termIndex === 0}
+                onClick={() => {
+                  setShowAnswer(false);
+                  setTermIndex(prev => Math.max(0, prev - 1));
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded font-semibold"
+              >
+                ← Previous
+              </button>
+
+              <span>Term {termIndex + 1} of {fvaTerms.length}</span>
+
+              <button
+                disabled={termIndex === fvaTerms.length - 1}
+                onClick={() => {
+                  setShowAnswer(false);
+                  setTermIndex(prev => Math.min(fvaTerms.length - 1, prev + 1));
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded font-semibold"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: SECURITY */}
+      {activeTab === 'security' && (
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl max-w-md mx-auto">
+          <h3 className="text-lg font-semibold text-slate-200 mb-2">Change Password</h3>
+          <p className="text-xs text-slate-400 mb-4">Set a custom password for your student login account.</p>
+
+          <form onSubmit={handleChangePassword} className="space-y-3">
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Current Password</label>
+              <input
+                type="password"
+                required
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white focus:outline-none focus:border-amber-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">New Password</label>
+              <input
+                type="password"
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white focus:outline-none focus:border-amber-400"
+              />
+            </div>
+
+            {passChangeStatus.msg && (
+              <p className={`text-xs ${passChangeStatus.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                {passChangeStatus.msg}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2 rounded text-sm transition"
+            >
+              Update Password
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
