@@ -46,7 +46,7 @@ class Student(db.Model):
     dues_paid = db.Column(db.Boolean, default=False)
     paperwork_complete = db.Column(db.Boolean, default=False)
     
-    # Uniform Assignment Tracking (JSON String or individual flags)
+    # Uniform Assignment Tracking
     uniform_tshirt = db.Column(db.Boolean, default=False)
     uniform_tshirt_size = db.Column(db.String(10), nullable=True, default='M')
     uniform_polo = db.Column(db.Boolean, default=False)
@@ -64,8 +64,6 @@ class Student(db.Model):
 # Safe Database Initialization
 with app.app_context():
     db.create_all()
-    
-    # Create or Update Director Cesar Lengua-Miranda Account
     admin = User.query.filter_by(student_id='ADMIN').first()
     if not admin:
         admin = User(
@@ -84,24 +82,58 @@ with app.app_context():
             db.session.add(Ensemble(name=name))
     db.session.commit()
 
-# FVA Omnibus Terms Dataset
-FVA_TERMS = [
-    {"term": "A cappella", "definition": "Singing without instrumental accompaniment.", "category": "General Terms"},
-    {"term": "Accelerando", "definition": "Gradually speeding up the tempo.", "category": "Tempo"},
-    {"term": "Adagio", "definition": "Slow and stately tempo.", "category": "Tempo"},
-    {"term": "Allegro", "definition": "Fast, lively, and bright tempo.", "category": "Tempo"},
-    {"term": "Andante", "definition": "At a walking pace; moderately slow.", "category": "Tempo"},
-    {"term": "Crescendo", "definition": "Gradually growing louder in volume.", "category": "Dynamics"},
-    {"term": "Decrescendo / Diminuendo", "definition": "Gradually growing softer in volume.", "category": "Dynamics"},
-    {"term": "Legato", "definition": "Smooth and connected singing or playing.", "category": "Articulation"},
-    {"term": "Staccato", "definition": "Short, detached, and separated notes.", "category": "Articulation"},
-    {"term": "Mezzo Forte (mf)", "definition": "Moderately loud.", "category": "Dynamics"},
-    {"term": "Piano (p)", "definition": "Soft volume.", "category": "Dynamics"},
-    {"term": "Forte (f)", "definition": "Loud volume.", "category": "Dynamics"},
-    {"term": "Solfège", "definition": "System of pitch syllable designation (Do, Re, Mi, Fa, Sol, La, Ti).", "category": "Theory"},
-    {"term": "Tessitura", "definition": "The most acceptable and comfortable vocal range for a given singer or part.", "category": "Vocal Mechanics"},
-    {"term": "Timbre", "definition": "The distinct tone color or quality of a voice or instrument.", "category": "Vocal Mechanics"},
-    {"term": "Subito", "definition": "Suddenly (e.g., subito piano - suddenly soft).", "category": "Expression"}
+# Official 50 FVA Terms Dataset
+FVA_TERMS_FULL = [
+    {"num": 1, "term": "Anacrusis", "definition": "upbeat or pickup", "category": "Music Terms"},
+    {"num": 2, "term": "Arpeggio", "definition": "the notes of the chord played in succession to one another, rather than simultaneously; a broken chord", "category": "Music Terms"},
+    {"num": 3, "term": "Chromatic", "definition": "motion by half steps; also describes harmony or melody that employs some of the sequential 12 pitches (semi-tones) in an octave", "category": "Music Terms"},
+    {"num": 4, "term": "Descant", "definition": "a high obligato part above the melody", "category": "Music Terms"},
+    {"num": 5, "term": "Divisi", "definition": "performers singing the same part are divided to sing different parts.", "category": "Music Terms"},
+    {"num": 6, "term": "Falsetto", "definition": "type of vocal phonation that enables the singer to sing notes beyond the normal vocal range.", "category": "Music Terms"},
+    {"num": 7, "term": "Fermata", "definition": "a pause or hold", "category": "Music Terms"},
+    {"num": 8, "term": "Improvisation", "definition": "music that is created spontaneously", "category": "Music Terms"},
+    {"num": 9, "term": "Interval", "definition": "the relationship between two pitches, the distance between an upper and a lower pitch", "category": "Music Terms"},
+    {"num": 10, "term": "Ledger lines", "definition": "short horizontal lines used to extend a staff either higher or lower", "category": "Music Terms"},
+    {"num": 11, "term": "Mezzo forte", "definition": "medium loud", "category": "Music Terms"},
+    {"num": 12, "term": "Modulation", "definition": "to change key within a composition", "category": "Music Terms"},
+    {"num": 13, "term": "Opera", "definition": "a major vocal work that involves theatrical elements", "category": "Music Terms"},
+    {"num": 14, "term": "Oratorio", "definition": "large scale musical composition on a sacred subject.", "category": "Music Terms"},
+    {"num": 15, "term": "Senza", "definition": "without", "category": "Music Terms"},
+    {"num": 16, "term": "Solfege", "definition": "a system used for teaching sight-reading (Do-Re-Mi)", "category": "Music Terms"},
+    {"num": 17, "term": "Tessitura", "definition": "most widely used range of pitches in a piece of music", "category": "Music Terms"},
+    {"num": 18, "term": "Triad", "definition": "three note chord consisting of the root, third, and fifth", "category": "Music Terms"},
+    {"num": 19, "term": "Vibrato", "definition": "a rapid fluctuation of pitch slightly higher or lower than the main pitch", "category": "Music Terms"},
+    {"num": 20, "term": "Form", "definition": "the organization and structure of a composition", "category": "Form"},
+    {"num": 21, "term": "Binary form", "definition": "AB- form of a composition that has two distinct sections", "category": "Form"},
+    {"num": 22, "term": "Strophic", "definition": "describes a song where the stanzas are all sung to the same music", "category": "Form"},
+    {"num": 23, "term": "Part song", "definition": "an unaccompanied homophonic choral composition for three or more voices", "category": "Form"},
+    {"num": 24, "term": "D. C. or Da Capo", "definition": "repeat from the beginning of the composition", "category": "Form"},
+    {"num": 25, "term": "Bel canto", "definition": "“beautiful singing”; an Italian Opera term", "category": "Style and Phrasing"},
+    {"num": 26, "term": "Cantabile", "definition": "in a singing style; singable", "category": "Style and Phrasing"},
+    {"num": 27, "term": "Dolce", "definition": "sweetly, usually also softly", "category": "Style and Phrasing"},
+    {"num": 28, "term": "Espressivo", "definition": "to play or sing with expression", "category": "Style and Phrasing"},
+    {"num": 29, "term": "Legato", "definition": "to play or sing in a smooth, connected manner", "category": "Style and Phrasing"},
+    {"num": 30, "term": "Meno mosso", "definition": "less motion", "category": "Style and Phrasing"},
+    {"num": 31, "term": "Motif", "definition": "a short musical idea or melodic theme, usually shorter than a musical phrase", "category": "Style and Phrasing"},
+    {"num": 32, "term": "Niente", "definition": "dying away to nothing", "category": "Style and Phrasing"},
+    {"num": 33, "term": "Poco piu mosso", "definition": "a little more motion", "category": "Style and Phrasing"},
+    {"num": 34, "term": "Sforzando", "definition": "strongly accented; forced", "category": "Style and Phrasing"},
+    {"num": 35, "term": "Sotto voce", "definition": "Softly; with subdued sound; performed in an undertone", "category": "Style and Phrasing"},
+    {"num": 36, "term": "Subito", "definition": "suddenly; quickly", "category": "Style and Phrasing"},
+    {"num": 37, "term": "A tempo", "definition": "return to the original tempo after some deviation", "category": "Tempo and Meter"},
+    {"num": 38, "term": "Accelerando", "definition": "becoming gradually faster", "category": "Tempo and Meter"},
+    {"num": 39, "term": "Allargando", "definition": "slowing of tempo, usually with increasing volume; most frequently occurs toward the end of a piece", "category": "Tempo and Meter"},
+    {"num": 40, "term": "Allegro con spirito", "definition": "fast tempo with spirit", "category": "Tempo and Meter"},
+    {"num": 41, "term": "Andante", "definition": "rather slow, at a moderate walking speed", "category": "Tempo and Meter"},
+    {"num": 42, "term": "Grandioso", "definition": "grand, majestic", "category": "Tempo and Meter"},
+    {"num": 43, "term": "Largo", "definition": "very slow and broad", "category": "Tempo and Meter"},
+    {"num": 44, "term": "L’istesso", "definition": "the beat remains constant when the meter changes", "category": "Tempo and Meter"},
+    {"num": 45, "term": "Meter", "definition": "indicated by a time signature, can be simple or compound", "category": "Tempo and Meter"},
+    {"num": 46, "term": "Presto", "definition": "very fast; faster than allegro", "category": "Tempo and Meter"},
+    {"num": 47, "term": "Rallentando", "definition": "gradually slowing down", "category": "Tempo and Meter"},
+    {"num": 48, "term": "Rubato", "definition": "Making the established pulse flexible by accelerating and slowing down the tempo; an expressive device", "category": "Tempo and Meter"},
+    {"num": 49, "term": "Tranquillo", "definition": "to perform in a relaxed tempo", "category": "Tempo and Meter"},
+    {"num": 50, "term": "Vivace", "definition": "lively; briskly", "category": "Tempo and Meter"}
 ]
 
 # API Endpoints
@@ -254,7 +286,7 @@ def delete_student(id):
 
 @app.route('/api/fva-terms', methods=['GET'])
 def get_fva_terms():
-    return jsonify(FVA_TERMS)
+    return jsonify(FVA_TERMS_FULL)
 
 @app.route('/api/admin/reset-student-password', methods=['POST'])
 def reset_student_password():
