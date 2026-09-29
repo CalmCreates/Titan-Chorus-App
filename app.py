@@ -61,6 +61,13 @@ class Student(db.Model):
     uniform_other = db.Column(db.String(100), nullable=True, default='')
     uniform_other_checked = db.Column(db.Boolean, default=False)
 
+class SheetMusic(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    composer = db.Column(db.String(100), nullable=True)
+    concert_folder = db.Column(db.String(100), nullable=False, default='General')
+    pdf_data = db.Column(db.Text, nullable=False) # Base64 encoded PDF string
+
 # Safe Database Initialization
 with app.app_context():
     db.create_all()
@@ -86,7 +93,7 @@ with app.app_context():
 FVA_TERMS_FULL = [
     {"num": 1, "term": "Anacrusis", "definition": "upbeat or pickup", "category": "Music Terms"},
     {"num": 2, "term": "Arpeggio", "definition": "the notes of the chord played in succession to one another, rather than simultaneously; a broken chord", "category": "Music Terms"},
-    {"num": 3, "term": "Chromatic", "definition": "motion by half steps; also describes harmony or melody that employs some of the sequential 12 pitches (semi-tones) in an octave", "category": "Music Terms"},
+    {"num": 3, "term": "Chromatic", "definition": "motion by half steps; also describes harmony or melody that employs some of the sequential 12 pitches in an octave", "category": "Music Terms"},
     {"num": 4, "term": "Descant", "definition": "a high obligato part above the melody", "category": "Music Terms"},
     {"num": 5, "term": "Divisi", "definition": "performers singing the same part are divided to sing different parts.", "category": "Music Terms"},
     {"num": 6, "term": "Falsetto", "definition": "type of vocal phonation that enables the singer to sing notes beyond the normal vocal range.", "category": "Music Terms"},
@@ -106,7 +113,7 @@ FVA_TERMS_FULL = [
     {"num": 20, "term": "Form", "definition": "the organization and structure of a composition", "category": "Form"},
     {"num": 21, "term": "Binary form", "definition": "AB- form of a composition that has two distinct sections", "category": "Form"},
     {"num": 22, "term": "Strophic", "definition": "describes a song where the stanzas are all sung to the same music", "category": "Form"},
-    {"num": 23, "term": "Part song", "definition": "an unaccompanied homophonic choral composition for three or more voices", "category": "Form"},
+    {"num": 23, "term": "Part song", "definition": "an unaccompanied homophonic choral composition for three or more voices", category: "Form"},
     {"num": 24, "term": "D. C. or Da Capo", "definition": "repeat from the beginning of the composition", "category": "Form"},
     {"num": 25, "term": "Bel canto", "definition": "“beautiful singing”; an Italian Opera term", "category": "Style and Phrasing"},
     {"num": 26, "term": "Cantabile", "definition": "in a singing style; singable", "category": "Style and Phrasing"},
@@ -254,32 +261,35 @@ def update_student_uniform():
         return jsonify({"success": True, "message": "Uniform checklist updated."})
     return jsonify({"success": False, "message": "Student record not found."}), 404
 
-@app.route('/api/students/<int:id>', methods=['PUT'])
-def update_student(id):
-    data = request.get_json() or {}
-    student = Student.query.get(id)
-    if student:
-        student.first_name = data.get('first_name', student.first_name)
-        student.last_name = data.get('last_name', student.last_name)
-        student.ensemble = data.get('ensemble', student.ensemble)
-        student.additional_ensembles = data.get('additional_ensembles', student.additional_ensembles)
-        student.voice_part = data.get('voice_part', student.voice_part)
-        student.height_inches = int(data.get('height_inches', student.height_inches or 65))
-        student.wenger_section = data.get('wenger_section', student.wenger_section)
-        student.wenger_row = data.get('wenger_row', student.wenger_row)
-        student.wenger_slot = data.get('wenger_slot', student.wenger_slot)
-        db.session.commit()
-        return jsonify({"success": True})
-    return jsonify({"success": False}), 404
+@app.route('/api/sheet-music', methods=['GET'])
+def get_sheet_music():
+    items = SheetMusic.query.all()
+    return jsonify([{
+        "id": m.id,
+        "title": m.title,
+        "composer": m.composer or 'Unknown',
+        "concert_folder": m.concert_folder,
+        "pdf_data": m.pdf_data
+    } for m in items])
 
-@app.route('/api/students/<int:id>', methods=['DELETE'])
-def delete_student(id):
-    student = Student.query.get(id)
-    if student:
-        user = User.query.filter_by(student_id=student.student_id).first()
-        if user:
-            db.session.delete(user)
-        db.session.delete(student)
+@app.route('/api/sheet-music', methods=['POST'])
+def upload_sheet_music():
+    data = request.get_json() or {}
+    new_piece = SheetMusic(
+        title=data.get('title', 'Untitled Score'),
+        composer=data.get('composer', 'Unknown'),
+        concert_folder=data.get('concert_folder', 'General'),
+        pdf_data=data.get('pdf_data', '')
+    )
+    db.session.add(new_piece)
+    db.session.commit()
+    return jsonify({"success": True, "message": "Sheet music uploaded successfully"})
+
+@app.route('/api/sheet-music/<int:id>', methods=['DELETE'])
+def delete_sheet_music(id):
+    piece = SheetMusic.query.get(id)
+    if piece:
+        db.session.delete(piece)
         db.session.commit()
         return jsonify({"success": True})
     return jsonify({"success": False}), 404
@@ -287,19 +297,6 @@ def delete_student(id):
 @app.route('/api/fva-terms', methods=['GET'])
 def get_fva_terms():
     return jsonify(FVA_TERMS_FULL)
-
-@app.route('/api/admin/reset-student-password', methods=['POST'])
-def reset_student_password():
-    data = request.get_json() or {}
-    student_id = data.get('student_id')
-    new_password = data.get('new_password', 'titan123')
-    
-    user = User.query.filter_by(student_id=student_id).first()
-    if user:
-        user.password_hash = generate_password_hash(new_password)
-        db.session.commit()
-        return jsonify({"success": True, "message": f"Password reset to '{new_password}' for student ID {student_id}"})
-    return jsonify({"success": False, "message": "Student user account not found."}), 404
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
