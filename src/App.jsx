@@ -55,11 +55,6 @@ const DEFAULT_FVA_TERMS = [
   { num: 50, term: "Vivace", definition: "lively; briskly", category: "Tempo and Meter" }
 ];
 
-const NOTE_FREQS = {
-  'C3': 130.81, 'D3': 146.83, 'E3': 164.81, 'F3': 174.61, 'G3': 196.00, 'A3': 220.00, 'B3': 246.94,
-  'C4': 261.63, 'D4': 293.66, 'E4': 329.63, 'F4': 349.23, 'G4': 392.00, 'A4': 440.00, 'B4': 493.88, 'C5': 523.25
-};
-
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginId, setLoginId] = useState('');
@@ -99,19 +94,6 @@ export default function App() {
   const [earQuestion, setEarQuestion] = useState(null);
   const [earFeedback, setEarFeedback] = useState('');
   const [earScore, setEarScore] = useState({ correct: 0, total: 0 });
-
-  // SIGHT SINGING ENGINE STATE
-  const [sightLevel, setSightLevel] = useState(1);
-  const [sightClef, setSightClef] = useState('treble');
-  const [studyWindow, setStudyWindow] = useState(20);
-  const [sightMelody, setSightMelody] = useState([]);
-  const [currentNoteIdx, setCurrentNoteIdx] = useState(0);
-  const [statusText, setStatusText] = useState('Ready');
-  const [detectedPitchHz, setDetectedPitchHz] = useState(0);
-  const [centsDev, setCentsDev] = useState(0);
-  const [isPitchCorrect, setIsPitchCorrect] = useState(null);
-  const [finalSightScore, setFinalSightScore] = useState(null);
-  const [isAssessingSight, setIsAssessingSight] = useState(false);
 
   // Uniform Tracking State
   const [studentUniforms, setStudentUniforms] = useState({
@@ -176,9 +158,8 @@ export default function App() {
       fetchEnsembles();
       fetchStudents();
       fetchFvaTerms();
-      generateSightMelody();
     }
-  }, [currentUser, sightLevel, sightClef]);
+  }, [currentUser]);
 
   const getAudioContext = () => {
     if (!audioCtxRef.current) {
@@ -293,7 +274,19 @@ export default function App() {
     }
   };
 
-  // EAR TRAINING PLAYBACK (MELODIC 1.5s DELAY THEN HARMONIC)
+  // EAR TRAINING MODULE SWITCHING & PLAYBACK LOGIC
+  const handleModuleSwitch = (moduleName) => {
+    setEarModule(moduleName);
+    setEarScore({ correct: 0, total: 0 }); // Auto-reset test score on switch
+    setEarFeedback('');
+    setEarQuestion(null);
+  };
+
+  const resetEarScore = () => {
+    setEarScore({ correct: 0, total: 0 });
+    setEarFeedback('');
+  };
+
   const generateEarQuestion = () => {
     setEarFeedback('');
     const baseFreq = 261.63; // C4
@@ -327,7 +320,7 @@ export default function App() {
       const picked = chords[Math.floor(Math.random() * chords.length)];
       const freqs = picked.ratios.map(r => baseFreq * Math.pow(2, r / 12));
       setEarQuestion({ answer: picked.name, freqs });
-      playChordMelodicThenHarmonic(freqs);
+      playChordMelodicThenHarmonicSlower(freqs);
     }
   };
 
@@ -335,7 +328,7 @@ export default function App() {
     try {
       const ctx = getAudioContext();
       
-      // Note 1 (Melodic)
+      // Note 1
       const osc1 = ctx.createOscillator();
       const g1 = ctx.createGain();
       osc1.frequency.setValueAtTime(f1, ctx.currentTime);
@@ -353,7 +346,7 @@ export default function App() {
       osc2.connect(g2); g2.connect(ctx.destination);
       osc2.start(ctx.currentTime + 1.5); osc2.stop(ctx.currentTime + 2.7);
 
-      // Both Together Harmonically (3.0s Later)
+      // Both Notes Together Harmonically (3.0s Later)
       const hOsc1 = ctx.createOscillator();
       const hOsc2 = ctx.createOscillator();
       const hG = ctx.createGain();
@@ -368,30 +361,31 @@ export default function App() {
     } catch (e) { console.error('Audio Error:', e); }
   };
 
-  const playChordMelodicThenHarmonic = (freqs) => {
+  // SLOWER CHORD PLAYBACK (1.0s Spacing Between Notes)
+  const playChordMelodicThenHarmonicSlower = (freqs) => {
     try {
       const ctx = getAudioContext();
       freqs.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         const g = ctx.createGain();
-        const t = ctx.currentTime + (idx * 0.5);
+        const t = ctx.currentTime + (idx * 1.0); // Slowed down from 0.5s to 1.0s
         osc.frequency.setValueAtTime(freq, t);
         g.gain.setValueAtTime(0.3, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
         osc.connect(g); g.connect(ctx.destination);
-        osc.start(t); osc.stop(t + 0.8);
+        osc.start(t); osc.stop(t + 1.2);
       });
 
-      // Harmonic Triad Playback
+      // Full Harmonic Triad Playback (3.5s Later)
       freqs.forEach((freq) => {
         const osc = ctx.createOscillator();
         const g = ctx.createGain();
-        const t = ctx.currentTime + 2.2;
+        const t = ctx.currentTime + 3.5;
         osc.frequency.setValueAtTime(freq, t);
         g.gain.setValueAtTime(0.2, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 2.0);
         osc.connect(g); g.connect(ctx.destination);
-        osc.start(t); osc.stop(t + 1.8);
+        osc.start(t); osc.stop(t + 2.0);
       });
     } catch (e) { console.error('Chord Audio Error:', e); }
   };
@@ -405,156 +399,6 @@ export default function App() {
       setEarFeedback(`❌ Incorrect. Answer was: ${earQuestion.answer}`);
       if (earMode === 'test') setEarScore(prev => ({ ...prev, total: prev.total + 1 }));
     }
-  };
-
-  // GENERATIVE SIGHT SINGING MELODY
-  const generateSightMelody = () => {
-    setFinalSightScore(null);
-    setCurrentNoteIdx(0);
-    const scale = sightClef === 'treble'
-      ? ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5']
-      : ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4'];
-
-    const solfeges = ['do', 're', 'mi', 'fa', 'sol', 'la', 'ti', 'do'];
-    const melody = [];
-
-    let lastIdx = 0;
-    melody.push({ note: scale[lastIdx], solfege: solfeges[lastIdx], freq: NOTE_FREQS[scale[lastIdx]] });
-
-    for (let i = 1; i < 8; i++) {
-      let step = 0;
-      if (sightLevel === 1) step = Math.random() > 0.5 ? 1 : -1;
-      else if (sightLevel === 2) step = Math.floor(Math.random() * 3) - 1;
-      else if (sightLevel === 3) step = Math.floor(Math.random() * 3) - 1;
-      else if (sightLevel === 4) step = Math.floor(Math.random() * 5) - 2;
-      else step = Math.floor(Math.random() * 7) - 3;
-
-      lastIdx = Math.max(0, Math.min(scale.length - 1, lastIdx + step));
-      melody.push({ note: scale[lastIdx], solfege: solfeges[lastIdx], freq: NOTE_FREQS[scale[lastIdx]] });
-    }
-
-    setSightMelody(melody);
-  };
-
-  const playSightTonic = () => {
-    if (sightMelody.length > 0) playFrequency(sightMelody[0].freq, sightMelody[0].note);
-  };
-
-  const startSightAssessment = async () => {
-    setIsAssessingSight(true);
-    playSightTonic();
-
-    let countdown = studyWindow;
-    setStatusText(`Study Window: ${countdown}s remaining`);
-
-    const studyInterval = setInterval(() => {
-      countdown--;
-      if (countdown > 0) {
-        setStatusText(`Study Window: ${countdown}s remaining`);
-      } else {
-        clearInterval(studyInterval);
-        setStatusText('🎙 SING NOW! Performance Active...');
-        beginMicPitchAssessor();
-      }
-    }, 1000);
-  };
-
-  const beginMicPitchAssessor = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const ctx = getAudioContext();
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 2048;
-      source.connect(analyser);
-
-      const buffer = new Float32Array(analyser.fftSize);
-      let totalSamples = 0;
-      let correctSamples = 0;
-      let step = 0;
-
-      const noteDuration = (studyWindow * 1000) / sightMelody.length;
-
-      const stepTimer = setInterval(() => {
-        step++;
-        if (step < sightMelody.length) setCurrentNoteIdx(step);
-      }, noteDuration);
-
-      const sampleLoop = () => {
-        analyser.getFloatTimeDomainData(buffer);
-        const pitchHz = autoCorrelate(buffer, ctx.sampleRate);
-
-        if (pitchHz > 0) {
-          setDetectedPitchHz(pitchHz.toFixed(1));
-          const target = sightMelody[step] || sightMelody[0];
-          const noteNum = 12 * (Math.log(pitchHz / 440) / Math.log(2)) + 69;
-          const targetNum = 12 * (Math.log(target.freq / 440) / Math.log(2)) + 69;
-          const dev = Math.round((noteNum - targetNum) * 100);
-
-          setCentsDev(dev);
-          totalSamples++;
-
-          if (Math.abs(dev) <= 50) {
-            correctSamples++;
-            setIsPitchCorrect(true);
-          } else {
-            setIsPitchCorrect(false);
-          }
-        } else {
-          setIsPitchCorrect(null);
-        }
-
-        if (isAssessingSight) requestAnimationFrame(sampleLoop);
-      };
-
-      requestAnimationFrame(sampleLoop);
-
-      setTimeout(() => {
-        clearInterval(stepTimer);
-        setIsAssessingSight(false);
-        stream.getTracks().forEach(t => t.stop());
-        setStatusText('✅ Assessment Complete!');
-
-        const finalPct = totalSamples > 0 ? Math.round((correctSamples / totalSamples) * 100) : 0;
-        setFinalSightScore(finalPct);
-      }, studyWindow * 1000);
-
-    } catch (e) {
-      alert('Microphone access denied or unsupported.');
-      setIsAssessingSight(false);
-    }
-  };
-
-  const autoCorrelate = (buf, sampleRate) => {
-    let SIZE = buf.length;
-    let rms = 0;
-    for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
-    rms = Math.sqrt(rms / SIZE);
-    if (rms < 0.01) return -1;
-
-    let r1 = 0, r2 = SIZE - 1, thres = 0.2;
-    for (let i = 0; i < SIZE / 2; i++) { if (Math.abs(buf[i]) < thres) { r1 = i; break; } }
-    for (let i = 1; i < SIZE / 2; i++) { if (Math.abs(buf[SIZE - i]) < thres) { r2 = SIZE - i; break; } }
-
-    buf = buf.slice(r1, r2);
-    SIZE = buf.length;
-
-    let c = new Array(SIZE).fill(0);
-    for (let i = 0; i < SIZE; i++) {
-      for (let j = 0; j < SIZE - i; j++) {
-        c[i] = c[i] + buf[j] * buf[j + i];
-      }
-    }
-
-    let d = 0;
-    while (c[d] > c[d + 1]) d++;
-    let maxval = -1, maxpos = -1;
-
-    for (let i = d; i < SIZE; i++) {
-      if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
-    }
-
-    return sampleRate / maxpos;
   };
 
   const handleSaveUniformChecklist = async (updatedState) => {
@@ -854,10 +698,10 @@ export default function App() {
     <div className="space-y-6 max-w-2xl mx-auto">
       <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl space-y-4">
         <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-          <h3 className="text-lg font-bold text-teal-400">🎧 Ear Training (Intervals & Chord Qualities)</h3>
+          <h3 className="text-lg font-bold text-teal-400">🎧 Ear Training Hub</h3>
           <div className="flex space-x-2">
             <button
-              onClick={() => { setEarMode('practice'); setEarScore({ correct: 0, total: 0 }); }}
+              onClick={() => { setEarMode('practice'); resetEarScore(); }}
               className={`px-3 py-1 rounded text-xs font-bold transition border ${
                 earMode === 'practice' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'
               }`}
@@ -865,19 +709,19 @@ export default function App() {
               Practice
             </button>
             <button
-              onClick={() => { setEarMode('test'); setEarScore({ correct: 0, total: 0 }); }}
+              onClick={() => { setEarMode('test'); resetEarScore(); }}
               className={`px-3 py-1 rounded text-xs font-bold transition border ${
                 earMode === 'test' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'
               }`}
             >
-              Test
+              Test Mode
             </button>
           </div>
         </div>
 
         <div className="flex space-x-2">
           <button
-            onClick={() => setEarModule('intervals')}
+            onClick={() => handleModuleSwitch('intervals')}
             className={`px-3 py-1.5 rounded text-xs font-bold flex-1 border ${
               earModule === 'intervals' ? 'bg-amber-500 text-slate-950 border-white' : 'bg-slate-800 text-slate-300'
             }`}
@@ -885,7 +729,7 @@ export default function App() {
             Intervals
           </button>
           <button
-            onClick={() => setEarModule('chords')}
+            onClick={() => handleModuleSwitch('chords')}
             className={`px-3 py-1.5 rounded text-xs font-bold flex-1 border ${
               earModule === 'chords' ? 'bg-amber-500 text-slate-950 border-white' : 'bg-slate-800 text-slate-300'
             }`}
@@ -895,8 +739,16 @@ export default function App() {
         </div>
 
         {earMode === 'test' && (
-          <div className="bg-slate-950 p-3 rounded-lg text-center text-xs text-teal-300 font-bold border border-slate-800">
-            Test Score: {earScore.correct} / {earScore.total} ({earScore.total > 0 ? Math.round((earScore.correct / earScore.total) * 100) : 0}%)
+          <div className="bg-slate-950 p-3 rounded-lg flex justify-between items-center text-xs font-bold border border-slate-800">
+            <span className="text-teal-300">
+              Score: {earScore.correct} / {earScore.total} ({earScore.total > 0 ? Math.round((earScore.correct / earScore.total) * 100) : 0}%)
+            </span>
+            <button
+              onClick={resetEarScore}
+              className="text-amber-400 hover:text-amber-300 underline text-[11px]"
+            >
+              🔄 Reset Score
+            </button>
           </div>
         )}
 
@@ -904,7 +756,7 @@ export default function App() {
           onClick={generateEarQuestion}
           className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 rounded-lg text-sm transition shadow-lg"
         >
-          ▶ Play Audio (Melodic $\rightarrow$ 1.5s Pause $\rightarrow$ Harmonic)
+          ▶ Play Question
         </button>
 
         {earFeedback && (
@@ -926,139 +778,6 @@ export default function App() {
               {item}
             </button>
           ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  // REAL MUSICAL STAFF SIGHT-SINGING RENDERER
-  const renderSightSingingStaff = () => (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-3">
-          <h3 className="text-lg font-bold text-teal-400">🎼 FVA 8-Measure Sight-Singing Staff</h3>
-          
-          <div className="flex flex-wrap gap-2 text-xs">
-            <select
-              value={sightClef}
-              onChange={(e) => setSightClef(e.target.value)}
-              className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-white font-bold"
-            >
-              <option value="treble">🎼 Treble Clef</option>
-              <option value="bass">𝄢 Bass Clef</option>
-            </select>
-
-            <select
-              value={sightLevel}
-              onChange={(e) => setSightLevel(Number(e.target.value))}
-              className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-white font-bold"
-            >
-              <option value={1}>Level 1 (4/4 Meter)</option>
-              <option value={2}>Level 2 (4/4 Meter)</option>
-              <option value={3}>Level 3 (6/8 Meter)</option>
-              <option value={4}>Level 4 (4/4 Meter)</option>
-              <option value={5}>Level 5 (4/4 Meter)</option>
-            </select>
-
-            <select
-              value={studyWindow}
-              onChange={(e) => setStudyWindow(Number(e.target.value))}
-              className="bg-slate-800 border border-slate-700 px-2 py-1 rounded text-white font-bold"
-            >
-              <option value={10}>10s Study</option>
-              <option value={20}>20s Study</option>
-              <option value={30}>30s Study</option>
-            </select>
-          </div>
-        </div>
-
-        {/* 5-LINE MUSICAL STAFF SVG */}
-        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-          <div className="flex justify-between items-center text-xs font-mono">
-            <span className="text-teal-300 font-bold">
-              Meter: {sightLevel === 3 ? '6/8' : '4/4'} | Key: C Major | 8 Measures
-            </span>
-            <span className="text-amber-400 font-bold">{statusText}</span>
-          </div>
-
-          <div className="overflow-x-auto py-2">
-            <svg viewBox="0 0 850 160" className="w-full min-w-[700px] h-40 bg-slate-900/90 rounded border border-slate-800">
-              {/* 5 Staff Lines */}
-              {[40, 56, 72, 88, 104].map((y) => (
-                <line key={y} x1="10" y1={y} x2="840" y2={y} stroke="#475569" strokeWidth="1.5" />
-              ))}
-
-              {/* Clef Header Symbol */}
-              <text x="20" y={sightClef === 'treble' ? "95" : "85"} fill="#2dd4bf" fontSize="46">
-                {sightClef === 'treble' ? '🎼' : '𝄢'}
-              </text>
-
-              {/* Notes & Bar Lines */}
-              {sightMelody.map((n, idx) => {
-                const x = 90 + (idx * 90);
-                const y = 110 - (idx * 6);
-                const isCurrent = idx === currentNoteIdx && isAssessingSight;
-
-                return (
-                  <g key={idx}>
-                    {/* Note Head */}
-                    <ellipse
-                      cx={x}
-                      cy={y}
-                      rx="6.5"
-                      ry="5"
-                      fill={isCurrent ? "#f59e0b" : "#f8fafc"}
-                      transform={`rotate(-20 ${x} ${y})`}
-                    />
-                    {/* Stem */}
-                    <line x1={x + 5} y1={y} x2={x + 5} y2={y - 28} stroke="#f8fafc" strokeWidth="1.5" />
-                    {/* Solfege Label */}
-                    <text x={x - 8} y="145" fill="#2dd4bf" fontSize="11" fontWeight="bold">
-                      {n.solfege}
-                    </text>
-                    {/* Bar Line */}
-                    {idx > 0 && idx % 2 === 0 && (
-                      <line x1={x - 20} y1="40" x2={x - 20} y2="104" stroke="#64748b" strokeWidth="1.5" />
-                    )}
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
-
-          <div className="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-800 text-xs">
-            <div className="flex items-center space-x-2">
-              <div className={`w-3 h-3 rounded-full ${isPitchCorrect === true ? 'bg-emerald-500' : isPitchCorrect === false ? 'bg-rose-600' : 'bg-slate-700'}`}></div>
-              <span className="text-white font-mono">Pitch: {detectedPitchHz ? `${detectedPitchHz} Hz` : '--'}</span>
-            </div>
-
-            <span className="text-slate-400 font-mono">Dev: {centsDev > 0 ? `+${centsDev}` : centsDev} cents</span>
-            <span className="text-teal-300 font-bold font-mono">Score: {finalSightScore !== null ? `${finalSightScore}%` : '--'}</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <button
-            onClick={playSightTonic}
-            className="bg-slate-800 hover:bg-slate-700 text-teal-300 font-bold py-3 px-4 rounded-xl text-xs transition border border-teal-900/60"
-          >
-            🔊 Play Tonic Pitch
-          </button>
-
-          <button
-            onClick={generateSightMelody}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3 px-4 rounded-xl text-xs transition border border-slate-700"
-          >
-            🎲 Generate New Example
-          </button>
-
-          <button
-            onClick={startSightAssessment}
-            disabled={isAssessingSight}
-            className="bg-teal-600 hover:bg-teal-500 text-slate-950 font-black py-3 px-4 rounded-xl text-xs transition shadow-lg"
-          >
-            ⏱ Start Study & Recording Test
-          </button>
         </div>
       </div>
     </div>
@@ -1327,14 +1046,6 @@ export default function App() {
         >
           🎧 Ear Training
         </button>
-        <button
-          onClick={() => setActiveTab('sight')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
-            activeTab === 'sight' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          🎼 Sight-Singing Staff
-        </button>
       </div>
 
       {/* TAB CONTENT ROUTING */}
@@ -1441,7 +1152,6 @@ export default function App() {
 
       {activeTab === 'fva' && renderFvaTab()}
       {activeTab === 'ear' && renderEarTrainingTab()}
-      {activeTab === 'sight' && renderSightSingingStaff()}
     </div>
   );
 }
