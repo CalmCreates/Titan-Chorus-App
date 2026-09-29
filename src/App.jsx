@@ -77,7 +77,7 @@ export default function App() {
   // Master Roster & Risers
   const [students, setStudents] = useState([]);
   const [ensembles, setEnsembles] = useState([]);
-  const [filterEnsemble, setFilterEnsemble] = useState('All');
+  const [filterEnsemble, setFilterEnsemble] = useState('All Ensembles');
   const [editingStudent, setEditingStudent] = useState(null);
   const [overflowEnabled, setOverflowEnabled] = useState(false);
 
@@ -94,6 +94,19 @@ export default function App() {
   const [earQuestion, setEarQuestion] = useState(null);
   const [earFeedback, setEarFeedback] = useState('');
   const [earScore, setEarScore] = useState({ correct: 0, total: 0 });
+
+  // DIRECTOR MUSIC LIBRARY STATE
+  const [sheetMusicList, setSheetMusicList] = useState([]);
+  const [selectedConcertFolder, setSelectedConcertFolder] = useState('ALL SHEET MUSIC');
+  const [concertFolders, setConcertFolders] = useState(['Fall Choral Showcase', 'Winter Concert', 'MPA Assessment', 'Spring Concert']);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [previewPdf, setPreviewPdf] = useState(null);
+
+  // New Piece Form
+  const [newPieceTitle, setNewPieceTitle] = useState('');
+  const [newPieceComposer, setNewPieceComposer] = useState('');
+  const [newPieceFolder, setNewPieceFolder] = useState('Fall Choral Showcase');
+  const [newPiecePdfData, setNewPiecePdfData] = useState('');
 
   // Uniform Tracking State
   const [studentUniforms, setStudentUniforms] = useState({
@@ -158,6 +171,7 @@ export default function App() {
       fetchEnsembles();
       fetchStudents();
       fetchFvaTerms();
+      fetchSheetMusic();
     }
   }, [currentUser]);
 
@@ -253,6 +267,64 @@ export default function App() {
     } catch (e) { console.error('Error fetching FVA terms:', e); }
   };
 
+  const fetchSheetMusic = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sheet-music`);
+      if (res.ok) setSheetMusicList(await res.json());
+    } catch (e) { console.error('Error fetching sheet music:', e); }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type === "application/pdf") {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewPiecePdfData(reader.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      alert("Please upload a valid PDF document.");
+    }
+  };
+
+  const handleSaveSheetMusic = async (e) => {
+    e.preventDefault();
+    if (!newPiecePdfData) {
+      alert("Please select a PDF file first.");
+      return;
+    }
+    try {
+      await fetch(`${API_BASE}/sheet-music`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newPieceTitle,
+          composer: newPieceComposer,
+          concert_folder: newPieceFolder,
+          pdf_data: newPiecePdfData
+        })
+      });
+      setNewPieceTitle('');
+      setNewPieceComposer('');
+      setNewPiecePdfData('');
+      fetchSheetMusic();
+    } catch (e) {
+      console.error('Error uploading score:', e);
+    }
+  };
+
+  const handleDeleteSheetMusic = async (id) => {
+    if (window.confirm("Are you sure you want to delete this score?")) {
+      try {
+        await fetch(`${API_BASE}/sheet-music/${id}`, { method: 'DELETE' });
+        fetchSheetMusic();
+        if (previewPdf && previewPdf.id === id) setPreviewPdf(null);
+      } catch (e) {
+        console.error('Error deleting score:', e);
+      }
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMsg('');
@@ -274,10 +346,35 @@ export default function App() {
     }
   };
 
+  // ALPHABETICAL DE-DUPLICATED ROSTER COMPUTATION
+  const getProcessedRoster = () => {
+    let filtered = filterEnsemble === 'All Ensembles'
+      ? students
+      : students.filter(s => s.ensemble === filterEnsemble || s.additional_ensembles?.includes(filterEnsemble));
+
+    // De-duplicate by Student ID (OCPS Number)
+    const uniqueMap = new Map();
+    filtered.forEach(s => {
+      if (!uniqueMap.has(s.student_id)) {
+        uniqueMap.set(s.student_id, s);
+      }
+    });
+
+    // Sort Alphabetically by Last Name, then First Name
+    const sorted = Array.from(uniqueMap.values()).sort((a, b) => {
+      const lastCompare = a.last_name.localeCompare(b.last_name);
+      if (lastCompare !== 0) return lastCompare;
+      return a.first_name.localeCompare(b.first_name);
+    });
+
+    // Assign dynamic 1-based index numbers with no duplicates
+    return sorted.map((item, idx) => ({ ...item, rosterNumber: idx + 1 }));
+  };
+
   // EAR TRAINING MODULE SWITCHING & PLAYBACK LOGIC
   const handleModuleSwitch = (moduleName) => {
     setEarModule(moduleName);
-    setEarScore({ correct: 0, total: 0 }); // Auto-reset test score on switch
+    setEarScore({ correct: 0, total: 0 });
     setEarFeedback('');
     setEarQuestion(null);
   };
@@ -328,7 +425,6 @@ export default function App() {
     try {
       const ctx = getAudioContext();
       
-      // Note 1
       const osc1 = ctx.createOscillator();
       const g1 = ctx.createGain();
       osc1.frequency.setValueAtTime(f1, ctx.currentTime);
@@ -337,7 +433,6 @@ export default function App() {
       osc1.connect(g1); g1.connect(ctx.destination);
       osc1.start(ctx.currentTime); osc1.stop(ctx.currentTime + 1.2);
 
-      // Note 2 (1.5s Later)
       const osc2 = ctx.createOscillator();
       const g2 = ctx.createGain();
       osc2.frequency.setValueAtTime(f2, ctx.currentTime + 1.5);
@@ -346,7 +441,6 @@ export default function App() {
       osc2.connect(g2); g2.connect(ctx.destination);
       osc2.start(ctx.currentTime + 1.5); osc2.stop(ctx.currentTime + 2.7);
 
-      // Both Notes Together Harmonically (3.0s Later)
       const hOsc1 = ctx.createOscillator();
       const hOsc2 = ctx.createOscillator();
       const hG = ctx.createGain();
@@ -361,14 +455,13 @@ export default function App() {
     } catch (e) { console.error('Audio Error:', e); }
   };
 
-  // SLOWER CHORD PLAYBACK (1.0s Spacing Between Notes)
   const playChordMelodicThenHarmonicSlower = (freqs) => {
     try {
       const ctx = getAudioContext();
       freqs.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         const g = ctx.createGain();
-        const t = ctx.currentTime + (idx * 1.0); // Slowed down from 0.5s to 1.0s
+        const t = ctx.currentTime + (idx * 1.0);
         osc.frequency.setValueAtTime(freq, t);
         g.gain.setValueAtTime(0.3, t);
         g.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
@@ -376,7 +469,6 @@ export default function App() {
         osc.start(t); osc.stop(t + 1.2);
       });
 
-      // Full Harmonic Triad Playback (3.5s Later)
       freqs.forEach((freq) => {
         const osc = ctx.createOscillator();
         const g = ctx.createGain();
@@ -603,191 +695,163 @@ export default function App() {
     </div>
   );
 
-  // FVA VOCABULARY TAB RENDERER
-  const renderFvaTab = () => {
-    const rawList = (fvaTerms && fvaTerms.length > 0) ? fvaTerms : DEFAULT_FVA_TERMS;
-    const categories = ['All', 'Music Terms', 'Form', 'Style and Phrasing', 'Tempo and Meter'];
-    const filteredList = selectedCategory === 'All' ? rawList : rawList.filter(t => t.category === selectedCategory);
-    const safeList = filteredList.length > 0 ? filteredList : rawList;
-    const currentTerm = safeList[termIndex % safeList.length];
+  // DIRECTOR SHEET MUSIC LIBRARY COMPONENT
+  const renderDirectorMusicLibrary = () => {
+    const filteredScores = selectedConcertFolder === 'ALL SHEET MUSIC'
+      ? sheetMusicList
+      : sheetMusicList.filter(s => s.concert_folder === selectedConcertFolder);
 
     return (
-      <div className="space-y-6 max-w-2xl mx-auto">
-        <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl space-y-4 text-center">
-          <h3 className="text-xl font-bold text-teal-400">🎵 FVA All-State Vocabulary (50 Terms)</h3>
-          
-          <div className="flex flex-wrap justify-center items-center gap-2">
-            <button
-              onClick={() => { setFvaDisplayMode('category'); setTermIndex(0); }}
-              className={`px-3 py-1 rounded text-xs font-bold border transition ${
-                fvaDisplayMode === 'category' ? 'bg-teal-600 text-white border-teal-400' : 'bg-slate-800 text-slate-400'
-              }`}
-            >
-              📂 Grouped by Category
-            </button>
-            <button
-              onClick={() => { setFvaDisplayMode('random'); setTermIndex(Math.floor(Math.random() * rawList.length)); }}
-              className={`px-3 py-1 rounded text-xs font-bold border transition ${
-                fvaDisplayMode === 'random' ? 'bg-teal-600 text-white border-teal-400' : 'bg-slate-800 text-slate-400'
-              }`}
-            >
-              🔀 Random Shuffle Mode
-            </button>
+      <section className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl mb-6 space-y-6">
+        <div className="flex flex-wrap justify-between items-center gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <h2 className="text-xl font-bold text-teal-400">🎼 Concert Sheet Music Library</h2>
+            <p className="text-xs text-slate-400">Upload and preview emergency backup PDF scores organized by Concert Folder.</p>
           </div>
 
-          {fvaDisplayMode === 'category' && (
-            <div className="flex flex-wrap justify-center gap-1.5 pt-2">
-              {categories.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => { setSelectedCategory(cat); setTermIndex(0); setShowAnswer(false); }}
-                  className={`px-2.5 py-1 rounded-full text-xs font-semibold transition border ${
-                    selectedCategory === cat ? 'bg-amber-500 text-slate-950 border-white' : 'bg-slate-800 text-slate-300 border-slate-700'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div
-            onClick={() => setShowAnswer(!showAnswer)}
-            className="my-4 p-8 bg-slate-950 border border-slate-800 hover:border-teal-500/60 rounded-xl cursor-pointer transition min-h-[170px] flex flex-col justify-center items-center shadow-xl"
-          >
-            <span className="text-[10px] uppercase font-bold text-teal-400 tracking-wider mb-2">
-              #{currentTerm.num} • {currentTerm.category}
-            </span>
-            <h4 className="text-2xl font-bold text-slate-100">{currentTerm.term}</h4>
-            {showAnswer ? (
-              <p className="text-teal-300 mt-4 text-sm font-medium leading-relaxed max-w-lg">{currentTerm.definition}</p>
-            ) : (
-              <p className="text-xs text-slate-500 mt-4">Click card to reveal definition</p>
-            )}
-          </div>
-
-          <div className="flex justify-between items-center text-xs text-slate-400">
-            <button
-              disabled={termIndex === 0}
-              onClick={() => { setShowAnswer(false); setTermIndex(prev => Math.max(0, prev - 1)); }}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded font-semibold text-white"
-            >
-              ← Previous
-            </button>
-
-            <span>Card {(termIndex % safeList.length) + 1} of {safeList.length}</span>
-
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              placeholder="Add New Concert Folder..."
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded text-xs text-white"
+            />
             <button
               onClick={() => {
-                setShowAnswer(false);
-                if (fvaDisplayMode === 'random') setTermIndex(Math.floor(Math.random() * rawList.length));
-                else setTermIndex(prev => (prev + 1) % safeList.length);
+                if (newFolderName.trim() && !concertFolders.includes(newFolderName)) {
+                  setConcertFolders([...concertFolders, newFolderName.trim()]);
+                  setNewFolderName('');
+                }
               }}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded font-semibold text-white"
+              className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-3 py-1.5 rounded text-xs"
             >
-              Next →
+              + Add Folder
             </button>
           </div>
         </div>
-      </div>
-    );
-  };
 
-  // EAR TRAINING TAB RENDERER
-  const renderEarTrainingTab = () => (
-    <div className="space-y-6 max-w-2xl mx-auto">
-      <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl space-y-4">
-        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-          <h3 className="text-lg font-bold text-teal-400">🎧 Ear Training Hub</h3>
-          <div className="flex space-x-2">
+        {/* FOLDER TABS */}
+        <div className="flex flex-wrap gap-2">
+          {['ALL SHEET MUSIC', ...concertFolders].map((folder) => (
             <button
-              onClick={() => { setEarMode('practice'); resetEarScore(); }}
-              className={`px-3 py-1 rounded text-xs font-bold transition border ${
-                earMode === 'practice' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'
+              key={folder}
+              onClick={() => setSelectedConcertFolder(folder)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition border ${
+                selectedConcertFolder === folder
+                  ? 'bg-amber-500 text-slate-950 border-white'
+                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
               }`}
             >
-              Practice
-            </button>
-            <button
-              onClick={() => { setEarMode('test'); resetEarScore(); }}
-              className={`px-3 py-1 rounded text-xs font-bold transition border ${
-                earMode === 'test' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'
-              }`}
-            >
-              Test Mode
-            </button>
-          </div>
-        </div>
-
-        <div className="flex space-x-2">
-          <button
-            onClick={() => handleModuleSwitch('intervals')}
-            className={`px-3 py-1.5 rounded text-xs font-bold flex-1 border ${
-              earModule === 'intervals' ? 'bg-amber-500 text-slate-950 border-white' : 'bg-slate-800 text-slate-300'
-            }`}
-          >
-            Intervals
-          </button>
-          <button
-            onClick={() => handleModuleSwitch('chords')}
-            className={`px-3 py-1.5 rounded text-xs font-bold flex-1 border ${
-              earModule === 'chords' ? 'bg-amber-500 text-slate-950 border-white' : 'bg-slate-800 text-slate-300'
-            }`}
-          >
-            Chord Qualities
-          </button>
-        </div>
-
-        {earMode === 'test' && (
-          <div className="bg-slate-950 p-3 rounded-lg flex justify-between items-center text-xs font-bold border border-slate-800">
-            <span className="text-teal-300">
-              Score: {earScore.correct} / {earScore.total} ({earScore.total > 0 ? Math.round((earScore.correct / earScore.total) * 100) : 0}%)
-            </span>
-            <button
-              onClick={resetEarScore}
-              className="text-amber-400 hover:text-amber-300 underline text-[11px]"
-            >
-              🔄 Reset Score
-            </button>
-          </div>
-        )}
-
-        <button
-          onClick={generateEarQuestion}
-          className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-3 rounded-lg text-sm transition shadow-lg"
-        >
-          ▶ Play Question
-        </button>
-
-        {earFeedback && (
-          <p className={`text-center font-bold text-sm ${earFeedback.includes('Correct') ? 'text-emerald-400' : 'text-red-400'}`}>
-            {earFeedback}
-          </p>
-        )}
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2">
-          {(earModule === 'intervals'
-            ? ['Unison', 'Minor 2nd', 'Major 2nd', 'Minor 3rd', 'Major 3rd', 'Perfect 4th', 'Tritone', 'Perfect 5th', 'Minor 6th', 'Major 6th', 'Minor 7th', 'Major 7th', 'Octave']
-            : ['Major Triad', 'Minor Triad', 'Augmented Triad', 'Diminished Triad']
-          ).map((item) => (
-            <button
-              key={item}
-              onClick={() => handleAnswerEarQuestion(item)}
-              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold py-2.5 px-2 rounded text-xs transition"
-            >
-              {item}
+              📁 {folder}
             </button>
           ))}
         </div>
-      </div>
-    </div>
-  );
+
+        {/* UPLOAD FORM */}
+        <form onSubmit={handleSaveSheetMusic} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+          <h3 className="text-xs font-bold text-teal-300 uppercase">+ Upload New PDF Score</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <input
+              type="text"
+              required
+              placeholder="Score Title (e.g. Sicut Cervus)"
+              value={newPieceTitle}
+              onChange={(e) => setNewPieceTitle(e.target.value)}
+              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+            />
+            <input
+              type="text"
+              placeholder="Composer (e.g. Palestrina)"
+              value={newPieceComposer}
+              onChange={(e) => setNewPieceComposer(e.target.value)}
+              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+            />
+            <select
+              value={newPieceFolder}
+              onChange={(e) => setNewPieceFolder(e.target.value)}
+              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
+            >
+              {concertFolders.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2">
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={handleFileUpload}
+              className="text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-teal-400 hover:file:bg-slate-700 cursor-pointer"
+            />
+            <button
+              type="submit"
+              className="w-full sm:w-auto bg-teal-600 hover:bg-teal-500 text-white font-bold px-6 py-2 rounded-lg text-xs transition shadow-md"
+            >
+              Save to Library
+            </button>
+          </div>
+        </form>
+
+        {/* SCORES GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredScores.map((score) => (
+            <div key={score.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between space-y-3">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block mb-1">
+                  📁 {score.concert_folder}
+                </span>
+                <h4 className="text-base font-bold text-white leading-snug">{score.title}</h4>
+                <p className="text-xs text-slate-400">{score.composer}</p>
+              </div>
+
+              <div className="flex justify-between items-center pt-2 border-t border-slate-800/80">
+                <button
+                  onClick={() => setPreviewPdf(score)}
+                  className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-3 py-1.5 rounded text-xs transition"
+                >
+                  👁 Open / Preview PDF
+                </button>
+                <button
+                  onClick={() => handleDeleteSheetMusic(score.id)}
+                  className="text-rose-400 hover:text-rose-300 font-bold text-xs"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* PDF PREVIEW MODAL */}
+        {previewPdf && (
+          <div className="fixed inset-0 bg-slate-950/90 z-50 flex flex-col p-4 md:p-8">
+            <div className="flex justify-between items-center bg-slate-900 border border-slate-800 p-4 rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-teal-400">{previewPdf.title}</h3>
+                <p className="text-xs text-slate-400">{previewPdf.composer} — Folder: {previewPdf.concert_folder}</p>
+              </div>
+              <button
+                onClick={() => setPreviewPdf(null)}
+                className="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded text-xs"
+              >
+                ✕ Close Reader
+              </button>
+            </div>
+
+            <iframe
+              src={previewPdf.pdf_data}
+              title="PDF Reader"
+              className="w-full flex-1 rounded-b-xl border border-slate-800 bg-white"
+            />
+          </div>
+        )}
+      </section>
+    );
+  };
 
   // DIRECTOR ADMIN DASHBOARD VIEW
   if (isDirector && !viewAsStudentMode) {
-    const filteredRoster = filterEnsemble === 'All'
-      ? students
-      : students.filter(s => s.ensemble === filterEnsemble || s.additional_ensembles?.includes(filterEnsemble));
+    const processedRoster = getProcessedRoster();
 
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
@@ -825,6 +889,9 @@ export default function App() {
 
         {renderAudioToolbar()}
 
+        {/* SHEET MUSIC LIBRARY */}
+        {renderDirectorMusicLibrary()}
+
         {/* DIRECTOR'S VIEW CHORAL RISER MAP */}
         <section className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl mb-6">
           <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
@@ -848,9 +915,9 @@ export default function App() {
               <select
                 value={filterEnsemble}
                 onChange={(e) => setFilterEnsemble(e.target.value)}
-                className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded text-sm text-slate-200"
+                className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded text-sm text-slate-200 font-bold"
               >
-                <option value="All">All Ensembles</option>
+                <option value="All Ensembles">All Ensembles (De-duplicated Roster)</option>
                 {ensembles.map(e => <option key={e} value={e}>{e}</option>)}
               </select>
             </div>
@@ -881,7 +948,7 @@ export default function App() {
 
                           <div className="grid grid-cols-4 gap-1 mt-1">
                             {slots.map((slotName) => {
-                              const singer = filteredRoster.find(
+                              const singer = processedRoster.find(
                                 s => (s.wenger_section || 'Riser A') === secName &&
                                      (s.wenger_row || 'Row 1') === rowName &&
                                      (s.wenger_slot || 'Far Left') === slotName
@@ -899,9 +966,12 @@ export default function App() {
                                 >
                                   {singer ? (
                                     <>
-                                      <p className="text-[10px] font-bold text-white leading-tight">{singer.first_name} {singer.last_name[0]}.</p>
+                                      <p className="text-[10px] font-bold text-white leading-tight">
+                                        <span className="text-amber-400 mr-0.5">#{singer.rosterNumber}</span>
+                                        {singer.first_name} {singer.last_name[0]}.
+                                      </p>
                                       <p className="text-[8px] text-teal-400 font-mono">{singer.voice_part}</p>
-                                      <p className="text-[7px] text-amber-300 font-bold">{singer.height_inches || 65}"</p>
+                                      <p className="text-[7px] text-slate-400">{singer.height_inches || 65}"</p>
                                     </>
                                   ) : (
                                     <span className="text-[8px] text-slate-700">•</span>
@@ -926,13 +996,22 @@ export default function App() {
           </div>
         </section>
 
-        {/* ROSTER TABLE */}
+        {/* ALPHABETICAL DE-DUPLICATED ROSTER TABLE */}
         <section className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl">
-          <h2 className="text-lg font-semibold text-slate-200 mb-4">Active Roster ({filteredRoster.length})</h2>
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-200">
+                Alphabetical Class Roster ({processedRoster.length} Singers)
+              </h2>
+              <p className="text-xs text-slate-400">Sorted alphabetically by Last Name with no duplicate Student IDs.</p>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm border-collapse">
               <thead>
                 <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase">
+                  <th className="py-2.5 px-3">#</th>
                   <th className="py-2.5 px-3">Student ID</th>
                   <th className="py-2.5 px-3">Name</th>
                   <th className="py-2.5 px-3">Primary Ensemble</th>
@@ -943,10 +1022,11 @@ export default function App() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 text-slate-300">
-                {filteredRoster.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-800/50">
+                {processedRoster.map((s) => (
+                  <tr key={s.student_id} className="hover:bg-slate-800/50">
+                    <td className="py-2.5 px-3 font-mono text-amber-400 font-bold">{s.rosterNumber}</td>
                     <td className="py-2.5 px-3 font-mono text-teal-400">{s.student_id}</td>
-                    <td className="py-2.5 px-3 font-medium text-white">{s.first_name} {s.last_name}</td>
+                    <td className="py-2.5 px-3 font-medium text-white">{s.last_name}, {s.first_name}</td>
                     <td className="py-2.5 px-3">{s.ensemble}</td>
                     <td className="py-2.5 px-3">{s.voice_part}</td>
                     <td className="py-2.5 px-3 font-bold text-amber-300">{s.height_inches || 65}"</td>
