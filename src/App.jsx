@@ -2,6 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const API_BASE = "https://titan-chorus-app.onrender.com/api";
 
+const DEFAULT_FVA_TERMS = [
+  { term: "A cappella", definition: "Singing without instrumental accompaniment.", category: "General Terms" },
+  { term: "Accelerando", definition: "Gradually speeding up the tempo.", category: "Tempo" },
+  { term: "Adagio", definition: "Slow and stately tempo.", category: "Tempo" },
+  { term: "Allegro", definition: "Fast, lively, and bright tempo.", category: "Tempo" },
+  { term: "Andante", definition: "At a walking pace; moderately slow.", category: "Tempo" },
+  { term: "Crescendo", definition: "Gradually growing louder in volume.", category: "Dynamics" },
+  { term: "Decrescendo", definition: "Gradually growing softer in volume.", category: "Dynamics" },
+  { term: "Legato", definition: "Smooth and connected singing or playing.", category: "Articulation" },
+  { term: "Staccato", definition: "Short, detached, and separated notes.", category: "Articulation" },
+  { term: "Subito", definition: "Suddenly (e.g., subito piano - suddenly soft).", category: "Expression" }
+];
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginId, setLoginId] = useState('');
@@ -30,6 +43,11 @@ export default function App() {
   const [editingStudent, setEditingStudent] = useState(null);
   const [overflowEnabled, setOverflowEnabled] = useState(false);
 
+  // FVA Practice Hub State
+  const [fvaTerms, setFvaTerms] = useState(DEFAULT_FVA_TERMS);
+  const [termIndex, setTermIndex] = useState(0);
+  const [showAnswer, setShowAnswer] = useState(false);
+
   // Uniform Tracking State
   const [studentUniforms, setStudentUniforms] = useState({
     uniform_tshirt: false,
@@ -52,16 +70,7 @@ export default function App() {
   const activeRisers = overflowEnabled ? [...baseRisers, 'Riser G'] : baseRisers;
   const activeRows = overflowEnabled ? ['Row 4', 'Row 3', 'Row 2', 'Row 1', 'Ground'] : ['Row 4', 'Row 3', 'Row 2', 'Row 1'];
   const slots = ['Far Left', 'Center Left', 'Center Right', 'Far Right'];
-  const voiceParts = ['Soprano 1', 'Soprano 2', 'Alto 1', 'Alto 2', 'Tenor 1', 'Tenor 2', 'Bass 1', 'Bass 2'];
 
-  const upcomingEvents = [
-    { date: 'Oct 6, 2026', title: 'FVA All-State Musicianship Exam Screening', location: 'Chorus Room' },
-    { date: 'Oct 15, 2026', title: 'Titan Chorus Fall Concert Rehearsal', location: 'Olympia Auditorium' },
-    { date: 'Oct 22, 2026', title: 'Fall Choral Showcase Performance', location: 'Olympia Main Stage' },
-    { date: 'Nov 3, 2026', title: 'OCPS All-County Audition Prep', location: 'Chorus Room' }
-  ];
-
-  // Octave 4 Base Frequencies
   const pitchPipePitches = [
     { note: 'C', label: 'C', freq: 261.63 },
     { note: 'C#', label: 'C#/Db', freq: 277.18 },
@@ -77,22 +86,25 @@ export default function App() {
     { note: 'B', label: 'B', freq: 493.88 }
   ];
 
-  // Piano Keys (B3 to C5)
-  const pianoKeys = [
-    { note: 'B3', label: 'B3', isBlack: false, freq: 246.94 },
-    { note: 'C4', label: 'C4', isBlack: false, freq: 261.63 },
-    { note: 'C#4', label: 'C#/Db', isBlack: true, freq: 277.18 },
-    { note: 'D4', label: 'D4', isBlack: false, freq: 293.66 },
-    { note: 'D#4', label: 'D#/Eb', isBlack: true, freq: 311.13 },
-    { note: 'E4', label: 'E4', isBlack: false, freq: 329.63 },
-    { note: 'F4', label: 'F4', isBlack: false, freq: 349.23 },
-    { note: 'F#4', label: 'F#/Gb', isBlack: true, freq: 369.99 },
-    { note: 'G4', label: 'G4', isBlack: false, freq: 392.00 },
-    { note: 'G#4', label: 'G#/Ab', isBlack: true, freq: 415.30 },
-    { note: 'A4', label: 'A4', isBlack: false, freq: 440.00 },
-    { note: 'A#4', label: 'A#/Bb', isBlack: true, freq: 466.16 },
-    { note: 'B4', label: 'B4', isBlack: false, freq: 493.88 },
-    { note: 'C5', label: 'C5', isBlack: false, freq: 523.25 }
+  // Piano Keys Layout Structuring (B3 to C5)
+  const whiteKeys = [
+    { note: 'B3', label: 'B3', freq: 246.94 },
+    { note: 'C4', label: 'C4', freq: 261.63 },
+    { note: 'D4', label: 'D4', freq: 293.66 },
+    { note: 'E4', label: 'E4', freq: 329.63 },
+    { note: 'F4', label: 'F4', freq: 349.23 },
+    { note: 'G4', label: 'G4', freq: 392.00 },
+    { note: 'A4', label: 'A4', freq: 440.00 },
+    { note: 'B4', label: 'B4', freq: 493.88 },
+    { note: 'C5', label: 'C5', freq: 523.25 }
+  ];
+
+  const blackKeys = [
+    { note: 'C#4', label: 'C#/Db', freq: 277.18, leftPos: '14.5%' },
+    { note: 'D#4', label: 'D#/Eb', freq: 311.13, leftPos: '26.5%' },
+    { note: 'F#4', label: 'F#/Gb', freq: 369.99, leftPos: '50.5%' },
+    { note: 'G#4', label: 'G#/Ab', freq: 415.30, leftPos: '62.5%' },
+    { note: 'A#4', label: 'A#/Bb', freq: 466.16, leftPos: '74.5%' }
   ];
 
   useEffect(() => {
@@ -142,7 +154,6 @@ export default function App() {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
-      // Apply Octave Offset: 2^(octaveOffset)
       const adjustedFreq = baseFreq * Math.pow(2, octaveOffset);
 
       osc.type = audioInstrument === 'piano' ? 'triangle' : 'sine';
@@ -224,7 +235,9 @@ export default function App() {
       const res = await fetch(`${API_BASE}/fva-terms`);
       if (res.ok) {
         const data = await res.json();
-        setFvaTerms(data);
+        if (data && data.length > 0) {
+          setFvaTerms(data);
+        }
       }
     } catch (e) {
       console.error('Error fetching FVA terms:', e);
@@ -334,13 +347,13 @@ export default function App() {
 
   const isDirector = currentUser.role === 'director';
 
-  // REHEARSAL AUDIO TOOLBAR WIDGET (Shared between Admin & Student Views)
+  // REHEARSAL AUDIO TOOLBAR WIDGET
   const renderAudioToolbar = () => (
     <div className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl mb-6">
       <div className="flex flex-wrap justify-between items-center gap-4 mb-4 border-b border-slate-800 pb-3">
         <div>
           <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider">🎹 Rehearsal Pitch & Metronome Tools</h3>
-          <p className="text-xs text-slate-400">Toggle between Pitch Buttons and Piano (B3-C5 with Enharmonics)</p>
+          <p className="text-xs text-slate-400">Toggle between Pitch Buttons and Visual Piano (B3-C5 with Enharmonics)</p>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -362,7 +375,7 @@ export default function App() {
                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
             }`}
           >
-            🎹 Piano (B3–C5)
+            🎹 Visual Keyboard (B3–C5)
           </button>
         </div>
       </div>
@@ -399,7 +412,7 @@ export default function App() {
         <div className="md:col-span-2 bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
           <div className="flex justify-between items-center mb-3">
             <h4 className="text-xs font-bold text-teal-300 uppercase">
-              {audioInstrument === 'pitch_pipe' ? '🎵 Chromatic Pitch Pipe' : '🎹 Rehearsal Piano (B3–C5)'}
+              {audioInstrument === 'pitch_pipe' ? '🎵 Chromatic Pitch Pipe' : '🎹 Visual Keyboard (B3–C5)'}
             </h4>
 
             {/* OCTAVE SWITCHER */}
@@ -421,7 +434,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* INSTRUMENT VIEW 1: PITCH PIPE BUTTON MATRIX */}
           {audioInstrument === 'pitch_pipe' ? (
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
               {pitchPipePitches.map((p) => (
@@ -440,24 +452,39 @@ export default function App() {
               ))}
             </div>
           ) : (
-            /* INSTRUMENT VIEW 2: PIANO KEYS (B3 to C5) WITH ENHARMONIC LABELS */
+            /* REALISTIC PIANO ROLL KEYBOARD VIEW */
             <div className="overflow-x-auto pb-2">
-              <div className="flex justify-center items-start min-w-[500px] h-36 bg-slate-900 p-2 rounded border border-slate-800 relative select-none">
-                {pianoKeys.map((k) => (
-                  <button
-                    key={k.note}
-                    onClick={() => playFrequency(k.freq, k.note)}
-                    className={`flex flex-col justify-end items-center pb-2 transition border rounded-b ${
-                      k.isBlack
-                        ? 'bg-slate-950 text-teal-300 border-slate-800 w-9 h-22 -mx-2 z-10 hover:bg-slate-900'
-                        : 'bg-slate-200 text-slate-950 border-slate-400 w-12 h-32 z-0 hover:bg-white'
-                    } ${activePitch === k.note ? 'ring-2 ring-amber-400 scale-95' : ''}`}
-                  >
-                    <span className="text-[9px] font-bold font-mono text-center leading-tight">
-                      {k.label}
-                    </span>
-                  </button>
-                ))}
+              <div className="relative min-w-[500px] h-36 bg-slate-900 p-2 rounded-lg border border-slate-800 select-none flex justify-center">
+                
+                {/* WHITE KEYS LAYER */}
+                <div className="flex w-full h-full relative">
+                  {whiteKeys.map((wk) => (
+                    <button
+                      key={wk.note}
+                      onClick={() => playFrequency(wk.freq, wk.note)}
+                      className={`flex-1 h-full bg-slate-100 hover:bg-white text-slate-900 border border-slate-400 rounded-b flex flex-col justify-end items-center pb-2 transition shadow-inner ${
+                        activePitch === wk.note ? '!bg-amber-400 ring-2 ring-amber-300' : ''
+                      }`}
+                    >
+                      <span className="text-[10px] font-extrabold font-mono">{wk.label}</span>
+                    </button>
+                  ))}
+
+                  {/* BLACK KEYS LAYER OVERLAY */}
+                  {blackKeys.map((bk) => (
+                    <button
+                      key={bk.note}
+                      onClick={() => playFrequency(bk.freq, bk.note)}
+                      style={{ left: bk.leftPos }}
+                      className={`absolute top-0 w-[10%] h-[60%] bg-slate-950 hover:bg-slate-800 text-teal-300 border border-slate-700 rounded-b flex flex-col justify-end items-center pb-1 transition z-20 shadow-2xl ${
+                        activePitch === bk.note ? '!bg-amber-500 text-slate-950 ring-2 ring-amber-300' : ''
+                      }`}
+                    >
+                      <span className="text-[8px] font-bold font-mono text-center leading-tight">{bk.label}</span>
+                    </button>
+                  ))}
+                </div>
+
               </div>
             </div>
           )}
@@ -465,6 +492,61 @@ export default function App() {
       </div>
     </div>
   );
+
+  // FVA MUSICIANSHIP TAB RENDERER
+  const renderFvaTab = () => {
+    const safeList = (fvaTerms && fvaTerms.length > 0) ? fvaTerms : DEFAULT_FVA_TERMS;
+    const currentTerm = safeList[termIndex] || safeList[0];
+
+    return (
+      <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl max-w-xl mx-auto text-center space-y-4">
+        <h3 className="text-lg font-bold text-teal-400">🎵 FVA All-State Musicianship Flashcards</h3>
+        <p className="text-xs text-slate-400">Click the card below to reveal the definition.</p>
+
+        <span className="inline-block bg-teal-950 text-teal-300 border border-teal-800/60 px-3 py-1 rounded-full text-xs font-semibold tracking-wider">
+          {currentTerm.category || "Vocabulary"}
+        </span>
+
+        <div
+          onClick={() => setShowAnswer(!showAnswer)}
+          className="my-4 p-8 bg-slate-950 border border-slate-800 hover:border-teal-500/60 rounded-xl cursor-pointer transition min-h-[160px] flex flex-col justify-center items-center shadow-lg"
+        >
+          <h4 className="text-2xl font-bold text-slate-100">{currentTerm.term}</h4>
+          {showAnswer ? (
+            <p className="text-teal-300 mt-4 text-sm font-medium leading-relaxed">{currentTerm.definition}</p>
+          ) : (
+            <p className="text-xs text-slate-500 mt-4">Click to reveal definition</p>
+          )}
+        </div>
+
+        <div className="flex justify-between items-center text-xs text-slate-400 pt-2">
+          <button
+            disabled={termIndex === 0}
+            onClick={() => {
+              setShowAnswer(false);
+              setTermIndex(prev => Math.max(0, prev - 1));
+            }}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded font-semibold text-white"
+          >
+            ← Previous
+          </button>
+
+          <span>Term {termIndex + 1} of {safeList.length}</span>
+
+          <button
+            disabled={termIndex === safeList.length - 1}
+            onClick={() => {
+              setShowAnswer(false);
+              setTermIndex(prev => Math.min(safeList.length - 1, prev + 1));
+            }}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded font-semibold text-white"
+          >
+            Next →
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   // DIRECTOR ADMIN DASHBOARD VIEW
   if (isDirector && !viewAsStudentMode) {
@@ -506,7 +588,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* SHARED REHEARSAL AUDIO TOOLBAR */}
+        {/* REHEARSAL AUDIO TOOLBAR */}
         {renderAudioToolbar()}
 
         {/* DIRECTOR'S VIEW CHORAL RISER MAP */}
@@ -655,10 +737,9 @@ export default function App() {
     );
   }
 
-  // STUDENT VIEW (ACCESSIBLE TO STUDENTS AND DIRECTORS PREVIEWING)
+  // STUDENT VIEW
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
-      {/* DIRECTOR PREVIEW BANNER */}
       {isDirector && viewAsStudentMode && (
         <div className="bg-teal-900/90 border border-teal-400 text-white px-4 py-2 rounded-xl mb-4 flex justify-between items-center text-xs font-bold">
           <span>👁 PREVIEW MODE: Viewing app as a Student</span>
@@ -695,7 +776,7 @@ export default function App() {
         </button>
       </header>
 
-      {/* SHARED REHEARSAL AUDIO TOOLBAR FOR STUDENTS */}
+      {/* REHEARSAL AUDIO TOOLBAR FOR STUDENTS */}
       {renderAudioToolbar()}
 
       {/* NAVIGATION TABS */}
@@ -830,24 +911,7 @@ export default function App() {
       )}
 
       {/* TAB 3: FVA MUSICIANSHIP */}
-      {activeTab === 'fva' && (
-        <div className="bg-slate-900 border border-teal-900/40 p-6 rounded-xl max-w-xl mx-auto text-center">
-          <span className="text-xs uppercase font-semibold text-teal-400 tracking-wider">
-            {fvaTerms[termIndex]?.category || "FVA Vocabulary"}
-          </span>
-          <div
-            onClick={() => setShowAnswer(!showAnswer)}
-            className="my-6 p-8 bg-slate-950 border border-slate-800 rounded-xl cursor-pointer hover:border-teal-500/50 transition min-h-[160px] flex flex-col justify-center items-center"
-          >
-            <h3 className="text-2xl font-bold text-slate-100">{fvaTerms[termIndex]?.term}</h3>
-            {showAnswer ? (
-              <p className="text-teal-300 mt-4 text-sm font-medium leading-relaxed">{fvaTerms[termIndex]?.definition}</p>
-            ) : (
-              <p className="text-xs text-slate-500 mt-4">Click to reveal definition</p>
-            )}
-          </div>
-        </div>
-      )}
+      {activeTab === 'fva' && renderFvaTab()}
     </div>
   );
 }
