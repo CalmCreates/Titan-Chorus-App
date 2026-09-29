@@ -39,6 +39,10 @@ export default function App() {
   const [stagedStudents, setStagedStudents] = useState([]);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
 
+  // Height State for New Student Entry (Feet & Inches)
+  const [inputFeet, setInputFeet] = useState(5);
+  const [inputInches, setInputInches] = useState(5);
+
   const baseRisers = ['Riser A', 'Riser B', 'Riser C', 'Riser D', 'Riser E', 'Riser F'];
   const activeRisers = overflowEnabled ? [...baseRisers, 'Riser G'] : baseRisers;
 
@@ -77,6 +81,7 @@ export default function App() {
     ensemble: '',
     additional_ensembles: '',
     voice_part: 'Soprano 1',
+    height_inches: 65,
     wenger_section: 'Riser A',
     wenger_row: 'Row 1',
     wenger_slot: 'Far Left'
@@ -265,6 +270,7 @@ export default function App() {
           last_name: cols[2],
           ensemble: ensembles[0] || 'Concert Chorus',
           voice_part: 'Soprano 1',
+          height_inches: 65,
           wenger_section: 'Riser A',
           wenger_row: 'Row 1',
           wenger_slot: 'Far Left'
@@ -338,11 +344,17 @@ export default function App() {
 
   const handleAddStudent = async (e) => {
     e.preventDefault();
+    const calculatedInches = (Number(inputFeet) * 12) + Number(inputInches);
+    const payload = {
+      ...newStudent,
+      height_inches: calculatedInches
+    };
+
     try {
       const res = await fetch(`${API_BASE}/students`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newStudent)
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         fetchStudents();
@@ -353,6 +365,7 @@ export default function App() {
           ensemble: ensembles[0] || '',
           additional_ensembles: '',
           voice_part: 'Soprano 1',
+          height_inches: 65,
           wenger_section: 'Riser A',
           wenger_row: 'Row 1',
           wenger_slot: 'Far Left'
@@ -582,6 +595,7 @@ export default function App() {
                           <th className="p-2">Last Name</th>
                           <th className="p-2">Assigned Ensemble</th>
                           <th className="p-2">Voice Part</th>
+                          <th className="p-2">Height (Inches)</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800 text-slate-200">
@@ -615,6 +629,19 @@ export default function App() {
                               >
                                 {voiceParts.map(vp => <option key={vp} value={vp}>{vp}</option>)}
                               </select>
+                            </td>
+                            <td className="p-2 font-bold text-teal-300">
+                              <input
+                                type="number"
+                                value={stg.height_inches || 65}
+                                onChange={(e) => {
+                                  const updated = [...stagedStudents];
+                                  updated[idx].height_inches = Number(e.target.value);
+                                  setStagedStudents(updated);
+                                }}
+                                className="w-16 bg-slate-800 border border-slate-700 px-2 py-1 rounded text-xs text-white"
+                              />
+                              {" "}in.
                             </td>
                           </tr>
                         ))}
@@ -707,7 +734,7 @@ export default function App() {
           <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
             <div>
               <h2 className="text-lg font-bold text-teal-400">🎶 Director's View Choral Riser Chart</h2>
-              <p className="text-xs text-slate-400">Conductor Podium at Stage Front (Bottom). 4 spots per row level.</p>
+              <p className="text-xs text-slate-400">Conductor Podium at Stage Front (Bottom). Displays singer voice part and total height (in inches).</p>
             </div>
 
             <div className="flex items-center space-x-3">
@@ -771,17 +798,19 @@ export default function App() {
                               return (
                                 <div
                                   key={slotName}
-                                  className={`p-1 rounded text-center border min-h-[38px] flex flex-col justify-center ${
+                                  className={`p-1 rounded text-center border min-h-[42px] flex flex-col justify-center ${
                                     singer
                                       ? 'bg-slate-800 border-slate-700 hover:border-teal-400 cursor-pointer'
                                       : 'bg-slate-950/40 border-slate-800/60'
                                   }`}
                                   onClick={() => singer && setEditingStudent(singer)}
+                                  title={singer ? `${singer.first_name} ${singer.last_name} (${singer.height_inches || 65}")` : ''}
                                 >
                                   {singer ? (
                                     <>
                                       <p className="text-[10px] font-bold text-white leading-tight">{singer.first_name} {singer.last_name[0]}.</p>
                                       <p className="text-[8px] text-teal-400 font-mono">{singer.voice_part}</p>
+                                      <p className="text-[7px] text-amber-300 font-bold">{singer.height_inches || 65}"</p>
                                     </>
                                   ) : (
                                     <span className="text-[8px] text-slate-700">•</span>
@@ -840,7 +869,7 @@ export default function App() {
           </form>
         </section>
 
-        {/* ADD STUDENT FORM */}
+        {/* ADD STUDENT FORM WITH AUTO FEET & INCHES CONVERTER */}
         <section className="bg-slate-900 border border-teal-900/40 p-5 rounded-xl mb-6">
           <h2 className="text-lg font-semibold text-slate-200 mb-4">+ Add New Student</h2>
           <form onSubmit={handleAddStudent} className="grid grid-cols-1 md:grid-cols-8 gap-3">
@@ -882,6 +911,27 @@ export default function App() {
             >
               {voiceParts.map(vp => <option key={vp} value={vp}>{vp}</option>)}
             </select>
+
+            {/* FEET & INCHES CONVERTER INPUT */}
+            <div className="bg-slate-800 border border-slate-700 px-2 py-1 rounded flex items-center space-x-1 text-xs">
+              <span className="text-slate-400 text-[10px] uppercase font-bold">Height:</span>
+              <select
+                value={inputFeet}
+                onChange={(e) => setInputFeet(Number(e.target.value))}
+                className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-white"
+              >
+                {[4, 5, 6, 7].map(f => <option key={f} value={f}>{f} ft</option>)}
+              </select>
+              <select
+                value={inputInches}
+                onChange={(e) => setInputInches(Number(e.target.value))}
+                className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-white"
+              >
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => <option key={i} value={i}>{i} in</option>)}
+              </select>
+              <span className="text-teal-300 font-bold ml-1">={(inputFeet * 12) + inputInches}"</span>
+            </div>
+
             <select
               value={newStudent.wenger_section}
               onChange={(e) => setNewStudent({ ...newStudent, wenger_section: e.target.value })}
@@ -926,6 +976,7 @@ export default function App() {
                   <th className="py-2.5 px-3">Name</th>
                   <th className="py-2.5 px-3">Primary Ensemble</th>
                   <th className="py-2.5 px-3">Voice Part</th>
+                  <th className="py-2.5 px-3">Height (Total Inches)</th>
                   <th className="py-2.5 px-3">Spot Location</th>
                   <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
@@ -937,6 +988,7 @@ export default function App() {
                     <td className="py-2.5 px-3 font-medium text-white">{s.first_name} {s.last_name}</td>
                     <td className="py-2.5 px-3">{s.ensemble}</td>
                     <td className="py-2.5 px-3">{s.voice_part}</td>
+                    <td className="py-2.5 px-3 font-bold text-amber-300">{s.height_inches || 65}"</td>
                     <td className="py-2.5 px-3 font-semibold text-teal-300">
                       {s.wenger_section || 'Riser A'} — {s.wenger_row || 'Row 1'} ({s.wenger_slot || 'Far Left'})
                     </td>
@@ -1002,6 +1054,16 @@ export default function App() {
                 >
                   {voiceParts.map(vp => <option key={vp} value={vp}>{vp}</option>)}
                 </select>
+
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Total Height (Inches)</label>
+                  <input
+                    type="number"
+                    value={editingStudent.height_inches || 65}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, height_inches: Number(e.target.value) })}
+                    className="w-full bg-slate-800 border border-slate-700 px-3 py-2 rounded text-sm text-white font-bold"
+                  />
+                </div>
 
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Riser Section</label>
