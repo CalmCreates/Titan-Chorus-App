@@ -23,6 +23,14 @@ const FVA_TERMS = [
   { term: "Fermata", def: "Hold the note or rest longer than its written value." }
 ];
 
+const EAR_PROMPTS_BANK = [
+  { root: "C4", target: "G4", label: "Perfect 5th", options: ["Perfect 5th", "Major 3rd", "Minor 7th", "Perfect 4th"] },
+  { root: "C4", target: "E4", label: "Major 3rd", options: ["Major 3rd", "Perfect 5th", "Octave", "Minor 3rd"] },
+  { root: "C4", target: "F4", label: "Perfect 4th", options: ["Perfect 4th", "Perfect 5th", "Major 6th", "Major 2nd"] },
+  { root: "C4", target: "B4", label: "Major 7th", options: ["Major 7th", "Minor 7th", "Perfect 5th", "Octave"] },
+  { root: "C4", target: "C5", label: "Octave", options: ["Octave", "Perfect 5th", "Major 7th", "Major 3rd"] }
+];
+
 const RISER_SECTIONS = [
   { id: 'A', name: 'Riser A (Far Left)', color: 'bg-rose-950/60 border-rose-500/50 text-rose-300' },
   { id: 'B', name: 'Riser B (Left Center)', color: 'bg-amber-950/60 border-amber-500/50 text-amber-300' },
@@ -63,6 +71,7 @@ export default function App() {
   const [eventsList, setEventsList] = useState([]);
   const [budgetTransactions, setBudgetTransactions] = useState([]);
   const [startingBudget, setStartingBudget] = useState(0);
+  const [newStartingBudget, setNewStartingBudget] = useState('');
 
   // RISER STATE
   const [riserAssignments, setRiserAssignments] = useState({});
@@ -70,30 +79,33 @@ export default function App() {
   const [selectedRiserSection, setSelectedRiserSection] = useState('A');
 
   // FVA TERMS STATE
-  const [fvaMode, setFvaMode] = useState('study'); // 'study' or 'quiz'
+  const [fvaMode, setFvaMode] = useState('study');
   const [fvaCardIndex, setFvaCardIndex] = useState(0);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
-  const [fvaQuizScore, setFvaQuizScore] = useState(0);
-  const [fvaQuizQuestion, setFvaQuizQuestion] = useState(1);
+  const [fvaScore, setFvaScore] = useState(0);
+  const [fvaAttempts, setFvaAttempts] = useState(0);
+  const [fvaCurrentQuestionIndex, setFvaCurrentQuestionIndex] = useState(0);
+  const [fvaFeedback, setFvaFeedback] = useState('');
 
   // EAR TRAINING STATE
-  const [earSubMode, setEarSubMode] = useState('study'); // 'study' or 'quiz'
   const [earScore, setEarScore] = useState(0);
-  const [earQuestionCount, setEarQuestionCount] = useState(1);
+  const [earAttempts, setEarAttempts] = useState(0);
+  const [currentEarIndex, setCurrentEarIndex] = useState(0);
+  const [earFeedback, setEarFeedback] = useState('');
   const [showCelebrationModal, setShowCelebrationModal] = useState(false);
-  const [currentPrompt, setCurrentPrompt] = useState({ root: 'C4', target: 'G4', type: 'Interval: Perfect 5th' });
 
   // METRONOME & PITCH STATE
   const [bpm, setBpm] = useState(100);
   const [isMetronomePlaying, setIsMetronomePlaying] = useState(false);
   const [selectedOctave, setSelectedOctave] = useState(4);
-  const [pitchViewMode, setPitchViewMode] = useState('wheel'); // 'wheel' or 'keyboard'
+  const [pitchViewMode, setPitchViewMode] = useState('wheel');
   const metronomeTimer = useRef(null);
   const audioCtxRef = useRef(null);
 
   // BUDGET FORM STATE
   const [transDate, setTransDate] = useState(new Date().toISOString().split('T')[0]);
   const [transCategory, setTransCategory] = useState('Dues');
+  const [transDesc, setTransDesc] = useState('');
   const [transType, setTransType] = useState('income');
   const [transAmount, setTransAmount] = useState('');
   const [transStudentId, setTransStudentId] = useState('');
@@ -152,12 +164,13 @@ export default function App() {
     osc.stop(ctx.currentTime + 1.2);
   };
 
-  const playAudioPrompt = () => {
+  const playEarPrompt = () => {
     if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     const ctx = audioCtxRef.current;
 
-    const rootFreq = NOTE_FREQS[currentPrompt.root] || 261.63;
-    const targetFreq = NOTE_FREQS[currentPrompt.target] || 392.00;
+    const prompt = EAR_PROMPTS_BANK[currentEarIndex];
+    const rootFreq = NOTE_FREQS[prompt.root] || 261.63;
+    const targetFreq = NOTE_FREQS[prompt.target] || 392.00;
 
     // 1. Melodic Root Note
     const osc1 = ctx.createOscillator();
@@ -201,21 +214,54 @@ export default function App() {
     osc4.stop(ctx.currentTime + 2.4);
   };
 
-  const handleEarQuizAnswer = (isCorrect) => {
-    const newScore = isCorrect ? earScore + 1 : earScore;
-    setEarScore(newScore);
+  const handleEarAnswer = (chosenOption) => {
+    const currentPrompt = EAR_PROMPTS_BANK[currentEarIndex];
+    const isCorrect = chosenOption === currentPrompt.label;
 
-    if (earQuestionCount >= 20) {
-      if (newScore === 20) {
-        setShowCelebrationModal(true);
-      } else {
-        alert(`Quiz Complete! Score: ${newScore}/20`);
-      }
-      setEarQuestionCount(1);
-      setEarScore(0);
+    const newScore = isCorrect ? earScore + 1 : earScore;
+    const newAttempts = earAttempts + 1;
+
+    setEarScore(newScore);
+    setEarAttempts(newAttempts);
+
+    if (isCorrect) {
+      setEarFeedback('✅ Correct! Excellent listening.');
     } else {
-      setEarQuestionCount(prev => prev + 1);
+      setEarFeedback(`❌ Incorrect. The right answer was ${currentPrompt.label}.`);
     }
+
+    if (newScore === 20 && newAttempts === 20) {
+      setShowCelebrationModal(true);
+    }
+
+    // Load next random prompt
+    setTimeout(() => {
+      const nextIndex = Math.floor(Math.random() * EAR_PROMPTS_BANK.length);
+      setCurrentEarIndex(nextIndex);
+      setEarFeedback('');
+    }, 1500);
+  };
+
+  const handleFvaQuizAnswer = (chosenIndex) => {
+    const isCorrect = chosenIndex === fvaCurrentQuestionIndex;
+    const newScore = isCorrect ? fvaScore + 1 : fvaScore;
+    const newAttempts = fvaAttempts + 1;
+
+    setFvaScore(newScore);
+    setFvaAttempts(newAttempts);
+
+    if (isCorrect) {
+      setFvaFeedback('✅ Correct!');
+    } else {
+      setFvaFeedback(`❌ Incorrect. Correct definition: "${FVA_TERMS[fvaCurrentQuestionIndex].def}"`);
+    }
+
+    // Load next random question
+    setTimeout(() => {
+      const nextQ = Math.floor(Math.random() * FVA_TERMS.length);
+      setFvaCurrentQuestionIndex(nextQ);
+      setFvaFeedback('');
+    }, 1500);
   };
 
   const fetchStudents = async () => {
@@ -245,6 +291,46 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setStartingBudget(data.starting_budget || 0);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleUpdateStartingBudget = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE}/budget/starting`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ starting_budget: parseFloat(newStartingBudget || 0) })
+      });
+      if (res.ok) {
+        fetchStartingBudget();
+        setNewStartingBudget('');
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleAddTransaction = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE}/budget`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trans_date: transDate,
+          category: transCategory,
+          description: transDesc,
+          trans_type: transType,
+          amount: parseFloat(transAmount || 0),
+          student_id: transStudentId || null
+        })
+      });
+      if (res.ok) {
+        fetchBudget();
+        fetchStudents();
+        setTransDesc('');
+        setTransAmount('');
+        setTransStudentId('');
       }
     } catch (e) { console.error(e); }
   };
@@ -310,6 +396,10 @@ export default function App() {
   const formattedToday = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
+
+  const totalIncome = budgetTransactions.filter(t => t.trans_type === 'income').reduce((acc, t) => acc + t.amount, 0);
+  const totalExpenses = budgetTransactions.filter(t => t.trans_type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+  const currentBalance = startingBudget + totalIncome - totalExpenses;
 
   const AbsenceRequestModule = () => (
     <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
@@ -549,6 +639,7 @@ export default function App() {
             </div>
           )}
 
+          {/* FVA STUDY TERMS WITH SCORE & DYNAMIC PROMPTS */}
           {directorTab === 'fva' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-2xl mx-auto">
               <div className="flex justify-between items-center border-b border-slate-800 pb-3">
@@ -577,14 +668,21 @@ export default function App() {
               ) : (
                 <div className="space-y-4 text-center">
                   <div className="flex justify-between text-xs font-mono bg-slate-950 p-2 rounded">
-                    <span>Question {fvaQuizQuestion} / 8</span>
-                    <span className="text-teal-400 font-bold">Score: {fvaQuizScore}</span>
+                    <span>Attempts: {fvaAttempts}</span>
+                    <span className="text-teal-400 font-bold">Score: {fvaScore} / {fvaAttempts}</span>
                   </div>
+
+                  {fvaFeedback && <p className="text-xs font-bold text-teal-300">{fvaFeedback}</p>}
+
                   <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
-                    <p className="text-sm font-bold text-white">What is the definition of "{FVA_TERMS[fvaQuizQuestion - 1].term}"?</p>
+                    <p className="text-sm font-bold text-white">What is the definition of "{FVA_TERMS[fvaCurrentQuestionIndex].term}"?</p>
                     <div className="grid grid-cols-1 gap-2">
                       {FVA_TERMS.map((t, idx) => (
-                        <button key={idx} onClick={() => { if (idx === fvaQuizQuestion - 1) setFvaQuizScore(fvaQuizScore + 1); if (fvaQuizQuestion < 8) setFvaQuizQuestion(fvaQuizQuestion + 1); else alert('Quiz Done!'); }} className="bg-slate-800 hover:bg-teal-600 p-2.5 rounded text-xs text-left text-white">
+                        <button
+                          key={idx}
+                          onClick={() => handleFvaQuizAnswer(idx)}
+                          className="bg-slate-800 hover:bg-teal-600 p-2.5 rounded text-xs text-left text-white transition"
+                        >
                           {t.def}
                         </button>
                       ))}
@@ -595,19 +693,153 @@ export default function App() {
             </div>
           )}
 
+          {/* EAR TRAINING STUDIO WITH DYNAMIC PROMPTS & SCORE COUNTER */}
           {directorTab === 'eartraining' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-xl mx-auto text-center">
               <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
-              <button onClick={playAudioPrompt} className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg">
+
+              <div className="flex justify-between text-xs font-mono bg-slate-950 p-3 rounded border border-slate-800">
+                <span>Total Attempts: {earAttempts}</span>
+                <span className="text-teal-400 font-bold">Score: {earScore} / {earAttempts}</span>
+              </div>
+
+              {earFeedback && <p className="text-xs font-bold text-teal-300">{earFeedback}</p>}
+
+              <button onClick={playEarPrompt} className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg">
                 🔊 Play Prompt (Slow Melodic ➔ Harmonic)
               </button>
+
               <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
-                <p className="text-sm font-semibold text-white">Identify the prompt played above:</p>
+                <p className="text-sm font-semibold text-white">Identify the interval played above:</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => handleEarQuizAnswer(true)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Perfect 5th</button>
-                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Major 3rd</button>
-                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Minor 7th</button>
-                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Diminished Triad</button>
+                  {EAR_PROMPTS_BANK[currentEarIndex].options.map((opt, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleEarAnswer(opt)}
+                      className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white transition"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* RESTORED PROGRAM FINANCES TAB */}
+          {directorTab === 'budget' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
+                  <span className="text-xs uppercase font-bold text-slate-400 block">Starting Budget</span>
+                  <div className="text-2xl font-mono font-bold text-amber-400">${startingBudget.toFixed(2)}</div>
+                  <form onSubmit={handleUpdateStartingBudget} className="flex gap-2 pt-1">
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="New starting $"
+                      value={newStartingBudget}
+                      onChange={(e) => setNewStartingBudget(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                    />
+                    <button type="submit" className="bg-amber-600 text-white font-bold text-xs px-2 py-1 rounded">Set</button>
+                  </form>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
+                  <span className="text-xs uppercase font-bold text-emerald-400 block">Total Revenue</span>
+                  <div className="text-2xl font-mono font-bold text-emerald-300">+${totalIncome.toFixed(2)}</div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
+                  <span className="text-xs uppercase font-bold text-rose-400 block">Total Expenses</span>
+                  <div className="text-2xl font-mono font-bold text-rose-300">-${totalExpenses.toFixed(2)}</div>
+                </div>
+
+                <div className="bg-slate-900 border border-teal-500/50 p-4 rounded-xl space-y-1">
+                  <span className="text-xs uppercase font-bold text-teal-400 block">Net Available Balance</span>
+                  <div className="text-2xl font-mono font-bold text-teal-200">${currentBalance.toFixed(2)}</div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-md font-bold text-teal-400">💵 Record Payment or Expense</h3>
+                <form onSubmit={handleAddTransaction} className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Date</label>
+                    <input type="date" required value={transDate} onChange={(e) => setTransDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Type</label>
+                    <select value={transType} onChange={(e) => setTransType(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white">
+                      <option value="income">Income (+)</option>
+                      <option value="expense">Expense (-)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Attach to Student</label>
+                    <select value={transStudentId} onChange={(e) => setTransStudentId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white">
+                      <option value="">(None - General Program)</option>
+                      {students.filter(s => s.role !== 'director').map(s => (
+                        <option key={s.student_id} value={s.student_id}>{s.name} ({s.student_id})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Category</label>
+                    <input type="text" required placeholder="e.g. Fair Share Dues" value={transCategory} onChange={(e) => setTransCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Amount ($)</label>
+                    <input type="number" step="0.01" required placeholder="100.00" value={transAmount} onChange={(e) => setTransAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
+                  </div>
+
+                  <div className="flex items-end">
+                    <button type="submit" className="w-full bg-teal-600 hover:bg-teal-500 font-bold text-xs py-2 rounded text-white shadow">Log Entry</button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-md font-bold text-teal-400">📜 Financial Ledger</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 uppercase">
+                        <th className="py-2 px-2">Date</th>
+                        <th className="py-2 px-2">Type</th>
+                        <th className="py-2 px-2">Category</th>
+                        <th className="py-2 px-2">Attached Student</th>
+                        <th className="py-2 px-2 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {budgetTransactions.map((t) => {
+                        const linkedStudent = students.find(s => s.student_id === t.student_id);
+                        return (
+                          <tr key={t.id}>
+                            <td className="py-2 px-2 font-mono text-slate-400">{t.trans_date}</td>
+                            <td className="py-2 px-2 uppercase font-bold text-[10px]">
+                              <span className={t.trans_type === 'income' ? 'text-emerald-400' : 'text-rose-400'}>
+                                {t.trans_type}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 font-semibold text-white">{t.category}</td>
+                            <td className="py-2 px-2 text-slate-300">
+                              {linkedStudent ? `${linkedStudent.name} (${linkedStudent.student_id})` : '-'}
+                            </td>
+                            <td className={`py-2 px-2 font-mono font-bold text-right ${t.trans_type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {t.trans_type === 'income' ? '+' : '-'}${t.amount.toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -616,9 +848,8 @@ export default function App() {
           {directorTab === 'absences' && <AbsenceRequestModule />}
         </div>
       ) : (
-        /* FULL RESTORED STUDENT DASHBOARD WITH ALL TABS & TOOLS */
+        /* STUDENT VIEW OR DIRECTOR STUDENT PREVIEW */
         <div className="space-y-6 max-w-4xl mx-auto">
-          {/* STUDENT NAVIGATION TABS */}
           <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
             <button onClick={() => setStudentTab('home')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'home' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🏠 Home & Riser Seat</button>
             <button onClick={() => setStudentTab('tools')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'tools' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🎹 Pitch Pipe & Metronome</button>
@@ -627,7 +858,6 @@ export default function App() {
             <button onClick={() => setStudentTab('absences')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'absences' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📝 Absence Request</button>
           </div>
 
-          {/* STUDENT HOME TAB */}
           {studentTab === 'home' && (
             <div className="space-y-6">
               <div className="bg-teal-950/80 border border-teal-500/60 p-6 rounded-xl space-y-1">
@@ -650,7 +880,6 @@ export default function App() {
             </div>
           )}
 
-          {/* PITCH PIPE WHEEL & WORKING METRONOME TAB */}
           {studentTab === 'tools' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4 text-center">
@@ -737,11 +966,10 @@ export default function App() {
             </div>
           )}
 
-          {/* STUDENT FVA TERMS */}
           {studentTab === 'fva' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-2xl mx-auto">
               <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h3 className="text-lg font-bold text-teal-400">📖 FVA Study & Test Studio</h3>
+                <h3 className="text-lg font-bold text-teal-400">📖 FVA Terms</h3>
                 <div className="flex gap-2">
                   <button onClick={() => setFvaMode('study')} className={`px-3 py-1 rounded text-xs font-bold ${fvaMode === 'study' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Study Flashcards</button>
                   <button onClick={() => setFvaMode('quiz')} className={`px-3 py-1 rounded text-xs font-bold ${fvaMode === 'quiz' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Multiple Choice Quiz</button>
@@ -766,14 +994,21 @@ export default function App() {
               ) : (
                 <div className="space-y-4 text-center">
                   <div className="flex justify-between text-xs font-mono bg-slate-950 p-2 rounded">
-                    <span>Question {fvaQuizQuestion} / 8</span>
-                    <span className="text-teal-400 font-bold">Score: {fvaQuizScore}</span>
+                    <span>Attempts: {fvaAttempts}</span>
+                    <span className="text-teal-400 font-bold">Score: {fvaScore} / {fvaAttempts}</span>
                   </div>
+
+                  {fvaFeedback && <p className="text-xs font-bold text-teal-300">{fvaFeedback}</p>}
+
                   <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
-                    <p className="text-sm font-bold text-white">What is the definition of "{FVA_TERMS[fvaQuizQuestion - 1].term}"?</p>
+                    <p className="text-sm font-bold text-white">What is the definition of "{FVA_TERMS[fvaCurrentQuestionIndex].term}"?</p>
                     <div className="grid grid-cols-1 gap-2">
                       {FVA_TERMS.map((t, idx) => (
-                        <button key={idx} onClick={() => { if (idx === fvaQuizQuestion - 1) setFvaQuizScore(fvaQuizScore + 1); if (fvaQuizQuestion < 8) setFvaQuizQuestion(fvaQuizQuestion + 1); else alert('Quiz Done!'); }} className="bg-slate-800 hover:bg-teal-600 p-2.5 rounded text-xs text-left text-white">
+                        <button
+                          key={idx}
+                          onClick={() => handleFvaQuizAnswer(idx)}
+                          className="bg-slate-800 hover:bg-teal-600 p-2.5 rounded text-xs text-left text-white"
+                        >
                           {t.def}
                         </button>
                       ))}
@@ -784,26 +1019,38 @@ export default function App() {
             </div>
           )}
 
-          {/* STUDENT EAR TRAINING */}
           {studentTab === 'eartraining' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-xl mx-auto text-center">
               <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
-              <button onClick={playAudioPrompt} className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg">
+
+              <div className="flex justify-between text-xs font-mono bg-slate-950 p-3 rounded border border-slate-800">
+                <span>Total Attempts: {earAttempts}</span>
+                <span className="text-teal-400 font-bold">Score: {earScore} / {earAttempts}</span>
+              </div>
+
+              {earFeedback && <p className="text-xs font-bold text-teal-300">{earFeedback}</p>}
+
+              <button onClick={playEarPrompt} className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg">
                 🔊 Play Prompt (Slow Melodic ➔ Harmonic)
               </button>
+
               <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
-                <p className="text-sm font-semibold text-white">Identify the prompt played above:</p>
+                <p className="text-sm font-semibold text-white">Identify the interval played above:</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => handleEarQuizAnswer(true)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Perfect 5th</button>
-                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Major 3rd</button>
-                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Minor 7th</button>
-                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Diminished Triad</button>
+                  {EAR_PROMPTS_BANK[currentEarIndex].options.map((opt, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleEarAnswer(opt)}
+                      className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white transition"
+                    >
+                      {opt}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
           )}
 
-          {/* STUDENT ABSENCES */}
           {studentTab === 'absences' && <AbsenceRequestModule />}
         </div>
       )}
