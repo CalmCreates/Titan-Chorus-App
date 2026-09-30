@@ -23,7 +23,6 @@ const FVA_TERMS = [
   { term: "Fermata", def: "Hold the note or rest longer than its written value." }
 ];
 
-// RISER SECTIONS WITH COLOR THEMES
 const RISER_SECTIONS = [
   { id: 'A', name: 'Riser A (Far Left)', color: 'bg-rose-950/60 border-rose-500/50 text-rose-300' },
   { id: 'B', name: 'Riser B (Left Center)', color: 'bg-amber-950/60 border-amber-500/50 text-amber-300' },
@@ -36,9 +35,10 @@ const RISER_SECTIONS = [
 ];
 
 const NOTE_FREQS = {
-  "C4": 261.63, "C#4": 277.18, "D4": 293.66, "D#4": 311.13, "E4": 329.63,
-  "F4": 349.23, "F#4": 369.99, "G4": 392.00, "G#4": 415.30, "A4": 440.00,
-  "A#4": 466.16, "B4": 493.88, "C5": 523.25
+  "C2": 65.41, "C#2": 69.30, "D2": 73.42, "D#2": 77.78, "E2": 82.41, "F2": 87.31, "F#2": 92.50, "G2": 98.00, "G#2": 103.83, "A2": 110.00, "A#2": 116.54, "B2": 123.47,
+  "C3": 130.81, "C#3": 138.59, "D3": 146.83, "D#3": 155.56, "E3": 164.81, "F3": 174.61, "F#3": 185.00, "G3": 196.00, "G#3": 207.65, "A3": 220.00, "A#3": 233.08, "B3": 246.94,
+  "C4": 261.63, "C#4": 277.18, "D4": 293.66, "D#4": 311.13, "E4": 329.63, "F4": 349.23, "F#4": 369.99, "G4": 392.00, "G#4": 415.30, "A4": 440.00, "A#4": 466.16, "B4": 493.88,
+  "C5": 523.25
 };
 
 export default function App() {
@@ -66,7 +66,7 @@ export default function App() {
 
   // RISER STATE
   const [riserAssignments, setRiserAssignments] = useState({});
-  const [riserDisplayView, setRiserDisplayView] = useState('full'); // 'full' or 'section'
+  const [riserDisplayView, setRiserDisplayView] = useState('full');
   const [selectedRiserSection, setSelectedRiserSection] = useState('A');
 
   // FVA TERMS STATE
@@ -77,15 +77,17 @@ export default function App() {
   const [fvaQuizQuestion, setFvaQuizQuestion] = useState(1);
 
   // EAR TRAINING STATE
-  const [earMode, setEarMode] = useState('intervals'); // 'intervals' or 'chords'
-  const [earSubMode, setEarSubMode] = useState('quiz'); // 'study' or 'quiz'
+  const [earSubMode, setEarSubMode] = useState('study'); // 'study' or 'quiz'
   const [earScore, setEarScore] = useState(0);
   const [earQuestionCount, setEarQuestionCount] = useState(1);
+  const [showCelebrationModal, setShowCelebrationModal] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState({ root: 'C4', target: 'G4', type: 'Interval: Perfect 5th' });
 
   // METRONOME & PITCH STATE
   const [bpm, setBpm] = useState(100);
   const [isMetronomePlaying, setIsMetronomePlaying] = useState(false);
+  const [selectedOctave, setSelectedOctave] = useState(4);
+  const [pitchViewMode, setPitchViewMode] = useState('wheel'); // 'wheel' or 'keyboard'
   const metronomeTimer = useRef(null);
   const audioCtxRef = useRef(null);
 
@@ -133,7 +135,23 @@ export default function App() {
     osc.stop(ctx.currentTime + 0.05);
   };
 
-  // AUDIO PROMPT: MELODICALLY SLOWLY, THEN HARMONICALLY TOGETHER
+  const playPitchNote = (noteName) => {
+    if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = audioCtxRef.current;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    const freq = NOTE_FREQS[noteName] || 440;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 1.2);
+  };
+
   const playAudioPrompt = () => {
     if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     const ctx = audioCtxRef.current;
@@ -181,6 +199,23 @@ export default function App() {
     osc4.start(ctx.currentTime + 1.4);
     osc3.stop(ctx.currentTime + 2.4);
     osc4.stop(ctx.currentTime + 2.4);
+  };
+
+  const handleEarQuizAnswer = (isCorrect) => {
+    const newScore = isCorrect ? earScore + 1 : earScore;
+    setEarScore(newScore);
+
+    if (earQuestionCount >= 20) {
+      if (newScore === 20) {
+        setShowCelebrationModal(true);
+      } else {
+        alert(`Quiz Complete! Score: ${newScore}/20`);
+      }
+      setEarQuestionCount(1);
+      setEarScore(0);
+    } else {
+      setEarQuestionCount(prev => prev + 1);
+    }
   };
 
   const fetchStudents = async () => {
@@ -257,7 +292,6 @@ export default function App() {
     });
   };
 
-  // GET DYNAMIC SEAT ASSIGNMENT FOR STUDENT OR DIRECTOR
   const getAssignedSeatText = () => {
     if (!currentUser) return 'Not Signed In';
     if (currentUser.role === 'director' && viewMode === 'director') {
@@ -388,14 +422,26 @@ export default function App() {
         </div>
       </header>
 
-      {/* MAIN CONTAINER */}
+      {/* CELEBRATION MODAL */}
+      {showCelebrationModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-teal-500 p-8 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <div className="text-4xl animate-bounce">🐧🎉</div>
+            <h2 className="text-2xl font-extrabold text-teal-300">PERFECT 20/20 SCORE!</h2>
+            <p className="text-xs text-slate-300">Incredible ear training accuracy!</p>
+            <button onClick={() => setShowCelebrationModal(false)} className="w-full bg-teal-600 text-white font-bold py-2 rounded-lg text-xs">Continue</button>
+          </div>
+        </div>
+      )}
+
+      {/* DIRECTOR VIEW */}
       {(role === 'director' && viewMode === 'director') ? (
         <div className="space-y-6">
           <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
             {[
               { id: 'welcome', label: '🏠 Welcome Hub' },
-              { id: 'risers', label: '🎶 Stage Riser Map (Full & Section View)' },
-              { id: 'fva', label: '📖 FVA Study & Test' },
+              { id: 'risers', label: '🎶 Stage Riser Map' },
+              { id: 'fva', label: '📖 FVA Terms' },
               { id: 'eartraining', label: '👂 Ear Training Studio' },
               { id: 'absences', label: '📝 Absence Form' },
               { id: 'budget', label: '💰 Program Finances' }
@@ -437,7 +483,7 @@ export default function App() {
             </div>
           )}
 
-          {/* COLOR-CODED RISER MAP WITH FULL STAGE & SECTION VIEWS */}
+          {/* COLOR-CODED RISER MAP */}
           {directorTab === 'risers' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6">
               <div className="flex justify-between items-center">
@@ -449,23 +495,20 @@ export default function App() {
               </div>
 
               {riserDisplayView === 'full' ? (
-                <div className="space-y-4">
-                  <p className="text-xs text-slate-400 text-center">Full Stage Layout: Risers A–F, Overflow G, and Floor Level</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {RISER_SECTIONS.map(sec => (
-                      <div key={sec.id} className={`p-4 rounded-xl border ${sec.color} space-y-2`}>
-                        <h4 className="font-bold text-xs uppercase">{sec.name}</h4>
-                        <div className="space-y-1 text-[10px] font-mono">
-                          {[4, 3, 2, 1].map(row => (
-                            <div key={row} className="flex justify-between bg-black/40 p-1 rounded">
-                              <span>Row {row}</span>
-                              <span>{Object.keys(riserAssignments).filter(k => k.startsWith(`${sec.id}-R${row}`)).length} / 4 Filled</span>
-                            </div>
-                          ))}
-                        </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {RISER_SECTIONS.map(sec => (
+                    <div key={sec.id} className={`p-4 rounded-xl border ${sec.color} space-y-2`}>
+                      <h4 className="font-bold text-xs uppercase">{sec.name}</h4>
+                      <div className="space-y-1 text-[10px] font-mono">
+                        {[4, 3, 2, 1].map(row => (
+                          <div key={row} className="flex justify-between bg-black/40 p-1 rounded">
+                            <span>Row {row}</span>
+                            <span>{Object.keys(riserAssignments).filter(k => k.startsWith(`${sec.id}-R${row}`)).length} / 4 Filled</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -506,11 +549,10 @@ export default function App() {
             </div>
           )}
 
-          {/* FVA STUDY TERMS WITH FLASHCARDS & QUIZ */}
           {directorTab === 'fva' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-2xl mx-auto">
               <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h3 className="text-lg font-bold text-teal-400">📖 FVA Study & Test Studio</h3>
+                <h3 className="text-lg font-bold text-teal-400">📖 FVA Terms</h3>
                 <div className="flex gap-2">
                   <button onClick={() => setFvaMode('study')} className={`px-3 py-1 rounded text-xs font-bold ${fvaMode === 'study' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Study Flashcards</button>
                   <button onClick={() => setFvaMode('quiz')} className={`px-3 py-1 rounded text-xs font-bold ${fvaMode === 'quiz' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Multiple Choice Quiz</button>
@@ -521,7 +563,7 @@ export default function App() {
                 <div className="text-center space-y-4">
                   <div
                     onClick={() => setIsCardFlipped(!isCardFlipped)}
-                    className="h-48 bg-slate-950 border border-teal-500/50 rounded-2xl flex flex-col justify-center items-center p-6 cursor-pointer transition transform hover:scale-105 shadow-xl"
+                    className="h-48 bg-slate-950 border border-teal-500/50 rounded-2xl flex flex-col justify-center items-center p-6 cursor-pointer"
                   >
                     <span className="text-[10px] uppercase font-bold text-teal-400 mb-2">{isCardFlipped ? 'Definition' : 'FVA Term (Click to Flip)'}</span>
                     <h4 className="text-2xl font-extrabold text-white">{isCardFlipped ? FVA_TERMS[fvaCardIndex].def : FVA_TERMS[fvaCardIndex].term}</h4>
@@ -542,7 +584,7 @@ export default function App() {
                     <p className="text-sm font-bold text-white">What is the definition of "{FVA_TERMS[fvaQuizQuestion - 1].term}"?</p>
                     <div className="grid grid-cols-1 gap-2">
                       {FVA_TERMS.map((t, idx) => (
-                        <button key={idx} onClick={() => { if (idx === fvaQuizQuestion - 1) setFvaQuizScore(fvaQuizScore + 1); if (fvaQuizQuestion < 8) setFvaQuizQuestion(fvaQuizQuestion + 1); else alert('Quiz Done!'); }} className="bg-slate-800 hover:bg-teal-600 p-2.5 rounded text-xs text-left font-semibold text-white transition">
+                        <button key={idx} onClick={() => { if (idx === fvaQuizQuestion - 1) setFvaQuizScore(fvaQuizScore + 1); if (fvaQuizQuestion < 8) setFvaQuizQuestion(fvaQuizQuestion + 1); else alert('Quiz Done!'); }} className="bg-slate-800 hover:bg-teal-600 p-2.5 rounded text-xs text-left text-white">
                           {t.def}
                         </button>
                       ))}
@@ -553,30 +595,19 @@ export default function App() {
             </div>
           )}
 
-          {/* EAR TRAINING STUDIO WITH REPLAY & SLOW MELODIC THEN HARMONIC SOUNDS */}
           {directorTab === 'eartraining' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-xl mx-auto text-center">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
-                <div className="flex gap-2">
-                  <button onClick={() => setEarSubMode('study')} className={`px-3 py-1 rounded text-xs font-bold ${earSubMode === 'study' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Study Mode</button>
-                  <button onClick={() => setEarSubMode('quiz')} className={`px-3 py-1 rounded text-xs font-bold ${earSubMode === 'quiz' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Quiz Mode</button>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <button onClick={playAudioPrompt} className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg">
-                  🔊 Play Prompt (Slow Melodic ➔ Harmonic)
-                </button>
-
-                <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
-                  <p className="text-sm font-semibold text-white">Identify the prompt played above:</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => alert('Correct!')} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Perfect 5th</button>
-                    <button onClick={() => alert('Try again')} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Major 3rd</button>
-                    <button onClick={() => alert('Try again')} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Minor 7th</button>
-                    <button onClick={() => alert('Try again')} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Diminished Triad</button>
-                  </div>
+              <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
+              <button onClick={playAudioPrompt} className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg">
+                🔊 Play Prompt (Slow Melodic ➔ Harmonic)
+              </button>
+              <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
+                <p className="text-sm font-semibold text-white">Identify the prompt played above:</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => handleEarQuizAnswer(true)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Perfect 5th</button>
+                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Major 3rd</button>
+                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Minor 7th</button>
+                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Diminished Triad</button>
                 </div>
               </div>
             </div>
@@ -585,26 +616,195 @@ export default function App() {
           {directorTab === 'absences' && <AbsenceRequestModule />}
         </div>
       ) : (
-        /* STUDENT VIEW OR DIRECTOR STUDENT PREVIEW */
+        /* FULL RESTORED STUDENT DASHBOARD WITH ALL TABS & TOOLS */
         <div className="space-y-6 max-w-4xl mx-auto">
-          {/* STUDENT ASSIGNED SEAT BANNER */}
-          <div className="bg-teal-950/80 border border-teal-500/60 p-6 rounded-xl space-y-1">
-            <span className="text-[10px] uppercase font-bold text-teal-400 block tracking-wider">Your Live Assigned Riser Spot</span>
-            <h2 className="text-xl font-bold text-white">📍 {getAssignedSeatText()}</h2>
-            <p className="text-xs text-slate-300">Ensemble: {currentUser.ensemble} • Voice Part: {currentUser.voice_part}</p>
+          {/* STUDENT NAVIGATION TABS */}
+          <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+            <button onClick={() => setStudentTab('home')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'home' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🏠 Home & Riser Seat</button>
+            <button onClick={() => setStudentTab('tools')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'tools' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🎹 Pitch Pipe & Metronome</button>
+            <button onClick={() => setStudentTab('fva')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'fva' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📖 FVA Terms & Flashcards</button>
+            <button onClick={() => setStudentTab('eartraining')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'eartraining' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>👂 Ear Training Studio</button>
+            <button onClick={() => setStudentTab('absences')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'absences' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📝 Absence Request</button>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-            <h3 className="text-sm font-bold text-teal-400 uppercase">📅 Titan Chorus Calendar</h3>
-            <div className="w-full h-[500px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
-              <iframe
-                src="https://calendar.google.com/calendar/embed?src=c_54746e83b58761dc633c39e40e6dd52b622aa84c89efc6669e5b8081f47fdf60%40group.calendar.google.com&ctz=America%2FNew_York"
-                style={{ border: 0, width: '100%', height: '100%' }}
-                frameBorder="0"
-                title="Student Calendar"
-              />
+          {/* STUDENT HOME TAB */}
+          {studentTab === 'home' && (
+            <div className="space-y-6">
+              <div className="bg-teal-950/80 border border-teal-500/60 p-6 rounded-xl space-y-1">
+                <span className="text-[10px] uppercase font-bold text-teal-400 block tracking-wider">Your Live Assigned Riser Spot</span>
+                <h2 className="text-xl font-bold text-white">📍 {getAssignedSeatText()}</h2>
+                <p className="text-xs text-slate-300">Ensemble: {currentUser.ensemble} • Voice Part: {currentUser.voice_part}</p>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-sm font-bold text-teal-400 uppercase">📅 Chorus Performance & Practice Calendar</h3>
+                <div className="w-full h-[500px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
+                  <iframe
+                    src="https://calendar.google.com/calendar/embed?src=c_54746e83b58761dc633c39e40e6dd52b622aa84c89efc6669e5b8081f47fdf60%40group.calendar.google.com&ctz=America%2FNew_York"
+                    style={{ border: 0, width: '100%', height: '100%' }}
+                    frameBorder="0"
+                    title="Student Calendar"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* PITCH PIPE WHEEL & WORKING METRONOME TAB */}
+          {studentTab === 'tools' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4 text-center">
+                <h3 className="text-md font-bold text-teal-400 uppercase">⏱️ Audio Metronome</h3>
+                <div className="text-4xl font-mono font-bold text-white">{bpm} <span className="text-xs text-slate-400 font-normal">BPM</span></div>
+                <input
+                  type="range"
+                  min="40"
+                  max="218"
+                  value={bpm}
+                  onChange={(e) => setBpm(parseInt(e.target.value))}
+                  className="w-full accent-teal-500 cursor-pointer"
+                />
+                <button
+                  onClick={() => setIsMetronomePlaying(!isMetronomePlaying)}
+                  className={`w-full font-bold text-xs py-3 rounded-lg transition ${
+                    isMetronomePlaying ? 'bg-rose-600 text-white' : 'bg-teal-600 text-white'
+                  }`}
+                >
+                  {isMetronomePlaying ? '⏹️ Stop Metronome' : '▶️ Start Metronome'}
+                </button>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4 text-center">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-md font-bold text-teal-400 uppercase">🎵 Pitch Pipe Tool</h3>
+                  <button
+                    onClick={() => setPitchViewMode(pitchViewMode === 'wheel' ? 'keyboard' : 'wheel')}
+                    className="bg-slate-800 text-xs px-2.5 py-1 rounded text-slate-300 font-bold border border-slate-700"
+                  >
+                    Switch to {pitchViewMode === 'wheel' ? '🎹 Keyboard' : '🎡 Pitch Wheel'}
+                  </button>
+                </div>
+
+                <div className="flex justify-center gap-2">
+                  {[2, 3, 4, 5].map(oct => (
+                    <button
+                      key={oct}
+                      onClick={() => setSelectedOctave(oct)}
+                      className={`px-3 py-1 rounded text-xs font-bold border ${selectedOctave === oct ? 'bg-amber-600 text-white border-amber-400' : 'bg-slate-950 text-slate-400 border-slate-800'}`}
+                    >
+                      Octave {oct}
+                    </button>
+                  ))}
+                </div>
+
+                {pitchViewMode === 'wheel' ? (
+                  <div className="grid grid-cols-4 gap-2 pt-2">
+                    {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(note => {
+                      const fullNote = `${note}${selectedOctave}`;
+                      return (
+                        <button
+                          key={note}
+                          onClick={() => playPitchNote(fullNote)}
+                          className="bg-slate-950 hover:bg-teal-600 border border-slate-800 hover:border-teal-400 p-3 rounded-lg text-xs font-mono font-bold text-teal-300 transition"
+                        >
+                          {fullNote}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex justify-center items-end gap-1 pt-4 h-36 bg-slate-950 rounded-xl p-2 border border-slate-800">
+                    {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(note => {
+                      const isSharp = note.includes('#');
+                      const fullNote = `${note}${selectedOctave}`;
+                      return (
+                        <button
+                          key={note}
+                          onClick={() => playPitchNote(fullNote)}
+                          className={`flex-1 rounded-b text-[10px] font-bold font-mono transition ${
+                            isSharp
+                              ? 'bg-slate-800 text-amber-300 h-20 border border-slate-700 z-10'
+                              : 'bg-slate-100 text-slate-900 h-28 hover:bg-teal-200'
+                          }`}
+                        >
+                          {note}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STUDENT FVA TERMS */}
+          {studentTab === 'fva' && (
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-2xl mx-auto">
+              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 className="text-lg font-bold text-teal-400">📖 FVA Study & Test Studio</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => setFvaMode('study')} className={`px-3 py-1 rounded text-xs font-bold ${fvaMode === 'study' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Study Flashcards</button>
+                  <button onClick={() => setFvaMode('quiz')} className={`px-3 py-1 rounded text-xs font-bold ${fvaMode === 'quiz' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Multiple Choice Quiz</button>
+                </div>
+              </div>
+
+              {fvaMode === 'study' ? (
+                <div className="text-center space-y-4">
+                  <div
+                    onClick={() => setIsCardFlipped(!isCardFlipped)}
+                    className="h-48 bg-slate-950 border border-teal-500/50 rounded-2xl flex flex-col justify-center items-center p-6 cursor-pointer"
+                  >
+                    <span className="text-[10px] uppercase font-bold text-teal-400 mb-2">{isCardFlipped ? 'Definition' : 'FVA Term (Click to Flip)'}</span>
+                    <h4 className="text-2xl font-extrabold text-white">{isCardFlipped ? FVA_TERMS[fvaCardIndex].def : FVA_TERMS[fvaCardIndex].term}</h4>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <button onClick={() => { setIsCardFlipped(false); setFvaCardIndex((fvaCardIndex - 1 + FVA_TERMS.length) % FVA_TERMS.length); }} className="bg-slate-800 px-4 py-2 rounded text-xs font-bold">← Previous</button>
+                    <span className="text-xs text-slate-400">{fvaCardIndex + 1} of {FVA_TERMS.length}</span>
+                    <button onClick={() => { setIsCardFlipped(false); setFvaCardIndex((fvaCardIndex + 1) % FVA_TERMS.length); }} className="bg-slate-800 px-4 py-2 rounded text-xs font-bold">Next →</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 text-center">
+                  <div className="flex justify-between text-xs font-mono bg-slate-950 p-2 rounded">
+                    <span>Question {fvaQuizQuestion} / 8</span>
+                    <span className="text-teal-400 font-bold">Score: {fvaQuizScore}</span>
+                  </div>
+                  <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
+                    <p className="text-sm font-bold text-white">What is the definition of "{FVA_TERMS[fvaQuizQuestion - 1].term}"?</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {FVA_TERMS.map((t, idx) => (
+                        <button key={idx} onClick={() => { if (idx === fvaQuizQuestion - 1) setFvaQuizScore(fvaQuizScore + 1); if (fvaQuizQuestion < 8) setFvaQuizQuestion(fvaQuizQuestion + 1); else alert('Quiz Done!'); }} className="bg-slate-800 hover:bg-teal-600 p-2.5 rounded text-xs text-left text-white">
+                          {t.def}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* STUDENT EAR TRAINING */}
+          {studentTab === 'eartraining' && (
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-xl mx-auto text-center">
+              <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
+              <button onClick={playAudioPrompt} className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg">
+                🔊 Play Prompt (Slow Melodic ➔ Harmonic)
+              </button>
+              <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
+                <p className="text-sm font-semibold text-white">Identify the prompt played above:</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => handleEarQuizAnswer(true)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Perfect 5th</button>
+                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Major 3rd</button>
+                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Minor 7th</button>
+                  <button onClick={() => handleEarQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white">Diminished Triad</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STUDENT ABSENCES */}
+          {studentTab === 'absences' && <AbsenceRequestModule />}
         </div>
       )}
     </div>
