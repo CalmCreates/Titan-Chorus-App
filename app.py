@@ -5,16 +5,8 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-
-# ---------------------------------------------------------------------------
-# CORS SETUP
-# ---------------------------------------------------------------------------
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# ---------------------------------------------------------------------------
-# DATABASE CONFIGURATION
-# Handles Render PostgreSQL (postgres:// -> postgresql://) or fallback SQLite
-# ---------------------------------------------------------------------------
 db_url = os.environ.get('DATABASE_URL')
 if db_url and db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -33,7 +25,7 @@ class User(db.Model):
     student_id = db.Column(db.String(50), unique=True, nullable=False)
     name = db.Column(db.String(100), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), default='student')  # 'director' or 'student'
+    role = db.Column(db.String(20), default='student')  # 'director', 'clc', 'student', 'alumni'
     ensemble = db.Column(db.String(100), default='Unassigned')
     voice_part = db.Column(db.String(50), default='TBD')
     dues_paid_amount = db.Column(db.Float, default=0.0)
@@ -74,7 +66,7 @@ class FinancialTransaction(db.Model):
     trans_date = db.Column(db.String(20), nullable=False)
     category = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(255), nullable=False)
-    trans_type = db.Column(db.String(20), nullable=False)  # 'income' or 'expense'
+    trans_type = db.Column(db.String(20), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     school_year = db.Column(db.String(20), default='2026-2027')
 
@@ -89,17 +81,12 @@ class FinancialTransaction(db.Model):
             "school_year": self.school_year
         }
 
-# ---------------------------------------------------------------------------
-# SAFE DATABASE INITIALIZATION
-# ---------------------------------------------------------------------------
 with app.app_context():
     try:
         db.create_all()
-        print("✅ Database tables verified and created successfully.")
     except Exception as e:
-        print(f"⚠️ Table creation warning: {e}")
+        print(f"DB Init Warning: {e}")
 
-    # Ensure Default ADMIN Director Account Exists
     try:
         admin = User.query.filter_by(student_id='ADMIN').first()
         if not admin:
@@ -113,14 +100,8 @@ with app.app_context():
             )
             db.session.add(admin)
             db.session.commit()
-            print("✅ Default ADMIN account created.")
-        else:
-            # Update password if needed
-            admin.password_hash = generate_password_hash('titan2026')
-            db.session.commit()
     except Exception as e:
         db.session.rollback()
-        print(f"⚠️ Admin creation error: {e}")
 
 # ---------------------------------------------------------------------------
 # API ROUTES
@@ -128,12 +109,7 @@ with app.app_context():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Endpoint for testing server status & keeping Render awake via pinging"""
-    return jsonify({
-        "status": "Online",
-        "program": "Olympia High School Titan Chorus Hub",
-        "database": app.config['SQLALCHEMY_DATABASE_URI'].split('://')[0]
-    }), 200
+    return jsonify({"status": "Online", "program": "Olympia High School Titan Chorus Hub"}), 200
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -141,11 +117,7 @@ def login():
     student_id = (data.get('student_id') or '').strip()
     password = (data.get('password') or '').strip()
 
-    if not student_id or not password:
-        return jsonify({"success": False, "message": "Missing credentials"}), 400
-
     user = User.query.filter_by(student_id=student_id).first()
-    
     if user and check_password_hash(user.password_hash, password):
         user_dict = user.to_dict()
         user_dict["success"] = True
@@ -153,10 +125,47 @@ def login():
 
     return jsonify({"success": False, "message": "Invalid Student ID or Password"}), 401
 
+@app.route('/api/change-password', methods=['POST'])
+def change_password():
+    data = request.get_json() or {}
+    student_id = data.get('student_id')
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+
+    user = User.query.filter_by(student_id=student_id).first()
+    if not user or not check_password_hash(user.password_hash, old_password):
+        return jsonify({"success": False, "message": "Current password is incorrect"}), 400
+
+    try:
+        user.password_hash = generate_password_hash(new_password)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Password updated successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
 @app.route('/api/students', methods=['GET'])
 def get_students():
-    students = User.query.filter(User.role != 'director').all()
+    students = User.query.all()
     return jsonify([s.to_dict() for s in students]), 200
+
+@app.route('/api/students/role', methods=['POST'])
+def update_student_role():
+    data = request.get_json() or {}
+    student_id = data.get('student_id')
+    new_role = data.get('role')  # 'clc', 'student', 'alumni'
+
+    user = User.query.filter_by(student_id=student_id).first()
+    if not user:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    try:
+        user.role = new_role
+        db.session.commit()
+        return jsonify({"success": True, "user": user.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route('/api/students/payment', methods=['POST'])
 def update_student_payment():
@@ -166,7 +175,7 @@ def update_student_payment():
 
     user = User.query.filter_by(student_id=student_id).first()
     if not user:
-        return jsonify({"success": False, "message": "Student not found"}), 404
+        return jsonify({"success": False, "message": "User not found"}), 404
 
     try:
         user.dues_paid_amount = float(amount)
@@ -204,9 +213,6 @@ def handle_budget():
     transactions = FinancialTransaction.query.order_by(FinancialTransaction.id.desc()).all()
     return jsonify([t.to_dict() for t in transactions]), 200
 
-# ---------------------------------------------------------------------------
-# MAIN APP ENTRY
-# ---------------------------------------------------------------------------
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
