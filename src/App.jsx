@@ -23,27 +23,32 @@ const FVA_TERMS = [
   { term: "Fermata", def: "Hold the note or rest longer than its written value." }
 ];
 
-// EAR TRAINING PROMPTS BANK WITH SPECIFIC ROOT AND TARGET PITCHES
-const EAR_PROMPTS_BANK = [
-  { root: "C4", target: "G4", label: "Perfect 5th", options: ["Perfect 5th", "Major 3rd", "Minor 7th", "Perfect 4th"] },
-  { root: "C4", target: "E4", label: "Major 3rd", options: ["Major 3rd", "Perfect 5th", "Octave", "Minor 3rd"] },
-  { root: "C4", target: "F4", label: "Perfect 4th", options: ["Perfect 4th", "Perfect 5th", "Major 6th", "Major 2nd"] },
-  { root: "C4", target: "B4", label: "Major 7th", options: ["Major 7th", "Minor 7th", "Perfect 5th", "Octave"] },
-  { root: "C4", target: "C5", label: "Octave", options: ["Octave", "Perfect 5th", "Major 7th", "Major 3rd"] },
-  { root: "C4", target: "D4", label: "Major 2nd", options: ["Major 2nd", "Minor 3rd", "Perfect 4th", "Perfect 5th"] },
-  { root: "C4", target: "D#4", label: "Minor 3rd", options: ["Minor 3rd", "Major 3rd", "Perfect 5th", "Minor 7th"] },
-  { root: "C4", target: "A4", label: "Major 6th", options: ["Major 6th", "Perfect 5th", "Major 7th", "Octave"] }
+// INTERVAL PROMPTS
+const INTERVAL_PROMPTS = [
+  { notes: ["C4", "G4"], label: "Perfect 5th", options: ["Perfect 5th", "Major 3rd", "Minor 7th", "Perfect 4th"] },
+  { notes: ["C4", "E4"], label: "Major 3rd", options: ["Major 3rd", "Perfect 5th", "Octave", "Minor 3rd"] },
+  { notes: ["C4", "F4"], label: "Perfect 4th", options: ["Perfect 4th", "Perfect 5th", "Major 6th", "Major 2nd"] },
+  { notes: ["C4", "B4"], label: "Major 7th", options: ["Major 7th", "Minor 7th", "Perfect 5th", "Octave"] },
+  { notes: ["C4", "C5"], label: "Octave", options: ["Octave", "Perfect 5th", "Major 7th", "Major 3rd"] }
+];
+
+// CHORD QUALITY PROMPTS (3-NOTE TRIADS)
+const CHORD_PROMPTS = [
+  { notes: ["C4", "E4", "G4"], label: "Major Triad", options: ["Major Triad", "Minor Triad", "Diminished Triad", "Augmented Triad"] },
+  { notes: ["C4", "D#4", "G4"], label: "Minor Triad", options: ["Major Triad", "Minor Triad", "Diminished Triad", "Augmented Triad"] },
+  { notes: ["C4", "D#4", "F#4"], label: "Diminished Triad", options: ["Major Triad", "Minor Triad", "Diminished Triad", "Augmented Triad"] },
+  { notes: ["C4", "E4", "G#4"], label: "Augmented Triad", options: ["Major Triad", "Minor Triad", "Diminished Triad", "Augmented Triad"] }
 ];
 
 const RISER_SECTIONS = [
-  { id: 'A', name: 'Riser A (Far Left)', color: 'bg-rose-950/60 border-rose-500/50 text-rose-300' },
-  { id: 'B', name: 'Riser B (Left Center)', color: 'bg-amber-950/60 border-amber-500/50 text-amber-300' },
-  { id: 'C', name: 'Riser C (Center Left)', color: 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300' },
-  { id: 'D', name: 'Riser D (Center Right)', color: 'bg-teal-950/60 border-teal-500/50 text-teal-300' },
-  { id: 'E', name: 'Riser E (Right Center)', color: 'bg-sky-950/60 border-sky-500/50 text-sky-300' },
-  { id: 'F', name: 'Riser F (Far Right)', color: 'bg-indigo-950/60 border-indigo-500/50 text-indigo-300' },
-  { id: 'G', name: 'Riser G (Overflow)', color: 'bg-purple-950/60 border-purple-500/50 text-purple-300' },
-  { id: 'FLOOR', name: 'Floor Level', color: 'bg-slate-900 border-slate-700 text-slate-300' }
+  { id: 'A', name: 'Riser A (Far Left)', color: 'bg-rose-950/60 border-rose-500/50 text-rose-300', rotation: '-rotate-6' },
+  { id: 'B', name: 'Riser B (Left Center)', color: 'bg-amber-950/60 border-amber-500/50 text-amber-300', rotation: '-rotate-3' },
+  { id: 'C', name: 'Riser C (Center Left)', color: 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300', rotation: 'rotate-0' },
+  { id: 'D', name: 'Riser D (Center Right)', color: 'bg-teal-950/60 border-teal-500/50 text-teal-300', rotation: 'rotate-0' },
+  { id: 'E', name: 'Riser E (Right Center)', color: 'bg-sky-950/60 border-sky-500/50 text-sky-300', rotation: 'rotate-3' },
+  { id: 'F', name: 'Riser F (Far Right)', color: 'bg-indigo-950/60 border-indigo-500/50 text-indigo-300', rotation: 'rotate-6' },
+  { id: 'G', name: 'Riser G (Overflow Rear)', color: 'bg-purple-950/60 border-purple-500/50 text-purple-300', rotation: 'rotate-0' },
+  { id: 'FLOOR', name: 'Floor Level', color: 'bg-slate-900 border-slate-700 text-slate-300', rotation: 'rotate-0' }
 ];
 
 const NOTE_FREQS = {
@@ -53,7 +58,6 @@ const NOTE_FREQS = {
   "C5": 523.25
 };
 
-// SHUFFLE HELPER UTILITY (FISHER-YATES SHUFFLE)
 const shuffleArray = (array) => {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -70,14 +74,13 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // VIEW MODE & NAVIGATION
+  // NAVIGATION
   const [viewMode, setViewMode] = useState('director');
   const [directorTab, setDirectorTab] = useState('welcome');
   const [studentTab, setStudentTab] = useState('home');
 
-  // DATA STATES
+  // DATA
   const [students, setStudents] = useState([]);
-  const [eventsList, setEventsList] = useState([]);
   const [budgetTransactions, setBudgetTransactions] = useState([]);
   const [startingBudget, setStartingBudget] = useState(0);
   const [newStartingBudget, setNewStartingBudget] = useState('');
@@ -96,7 +99,8 @@ export default function App() {
   const [fvaCurrentQuestionIndex, setFvaCurrentQuestionIndex] = useState(0);
   const [fvaFeedback, setFvaFeedback] = useState('');
 
-  // EAR TRAINING STATE WITH SHUFFLED OPTIONS
+  // EAR TRAINING STATE (INTERVALS VS CHORD QUALITY)
+  const [earCategory, setEarCategory] = useState('chords'); // 'intervals' or 'chords'
   const [earScore, setEarScore] = useState(0);
   const [earAttempts, setEarAttempts] = useState(0);
   const [currentEarIndex, setCurrentEarIndex] = useState(0);
@@ -104,7 +108,7 @@ export default function App() {
   const [earFeedback, setEarFeedback] = useState('');
   const [showCelebrationModal, setShowCelebrationModal] = useState(false);
 
-  // METRONOME & PITCH STATE
+  // METRONOME & PITCH
   const [bpm, setBpm] = useState(100);
   const [isMetronomePlaying, setIsMetronomePlaying] = useState(false);
   const [selectedOctave, setSelectedOctave] = useState(4);
@@ -123,19 +127,19 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       fetchStudents();
-      fetchEvents();
       fetchBudget();
       fetchStartingBudget();
     }
   }, [currentUser]);
 
-  // SHUFFLE EAR OPTIONS WHENEVER THE PROMPT INDEX CHANGES
+  // SHUFFLE EAR OPTIONS WHEN CATEGORY OR INDEX CHANGES
   useEffect(() => {
-    const currentPrompt = EAR_PROMPTS_BANK[currentEarIndex];
+    const bank = earCategory === 'intervals' ? INTERVAL_PROMPTS : CHORD_PROMPTS;
+    const currentPrompt = bank[currentEarIndex % bank.length];
     if (currentPrompt) {
       setShuffledEarOptions(shuffleArray(currentPrompt.options));
     }
-  }, [currentEarIndex]);
+  }, [currentEarIndex, earCategory]);
 
   useEffect(() => {
     if (isMetronomePlaying) {
@@ -182,58 +186,55 @@ export default function App() {
     osc.stop(ctx.currentTime + 1.2);
   };
 
+  // PLAY MELODICALLY SLOWLY FIRST, THEN HARMONICALLY TOGETHER
   const playEarPrompt = () => {
     if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     const ctx = audioCtxRef.current;
 
-    const prompt = EAR_PROMPTS_BANK[currentEarIndex];
-    const rootFreq = NOTE_FREQS[prompt.root] || 261.63;
-    const targetFreq = NOTE_FREQS[prompt.target] || 392.00;
+    const bank = earCategory === 'intervals' ? INTERVAL_PROMPTS : CHORD_PROMPTS;
+    const prompt = bank[currentEarIndex % bank.length];
+    const notes = prompt.notes;
 
-    // 1. Melodic Root Note
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.frequency.setValueAtTime(rootFreq, ctx.currentTime);
-    gain1.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(ctx.currentTime);
-    osc1.stop(ctx.currentTime + 0.6);
+    let delay = 0;
 
-    // 2. Melodic Target Note (Delayed 0.6s)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.frequency.setValueAtTime(targetFreq, ctx.currentTime + 0.6);
-    gain2.gain.setValueAtTime(0.3, ctx.currentTime + 0.6);
-    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(ctx.currentTime + 0.6);
-    osc2.stop(ctx.currentTime + 1.2);
+    // 1. Play Melodically (0.5s per note)
+    notes.forEach((n) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const freq = NOTE_FREQS[n] || 261.63;
 
-    // 3. Harmonic Together (Delayed 1.4s)
-    const osc3 = ctx.createOscillator();
-    const osc4 = ctx.createOscillator();
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.5);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.5);
+
+      delay += 0.55;
+    });
+
+    // 2. Play Harmonically Together (after melodic sequence completes)
+    const harmonicStart = delay + 0.2;
     const gainH = ctx.createGain();
-
-    osc3.frequency.setValueAtTime(rootFreq, ctx.currentTime + 1.4);
-    osc4.frequency.setValueAtTime(targetFreq, ctx.currentTime + 1.4);
-    gainH.gain.setValueAtTime(0.25, ctx.currentTime + 1.4);
-    gainH.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.4);
-
-    osc3.connect(gainH);
-    osc4.connect(gainH);
+    gainH.gain.setValueAtTime(0.25, ctx.currentTime + harmonicStart);
+    gainH.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + harmonicStart + 1.5);
     gainH.connect(ctx.destination);
 
-    osc3.start(ctx.currentTime + 1.4);
-    osc4.start(ctx.currentTime + 1.4);
-    osc3.stop(ctx.currentTime + 2.4);
-    osc4.stop(ctx.currentTime + 2.4);
+    notes.forEach((n) => {
+      const osc = ctx.createOscillator();
+      const freq = NOTE_FREQS[n] || 261.63;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + harmonicStart);
+      osc.connect(gainH);
+      osc.start(ctx.currentTime + harmonicStart);
+      osc.stop(ctx.currentTime + harmonicStart + 1.5);
+    });
   };
 
   const handleEarAnswer = (chosenOption) => {
-    const currentPrompt = EAR_PROMPTS_BANK[currentEarIndex];
+    const bank = earCategory === 'intervals' ? INTERVAL_PROMPTS : CHORD_PROMPTS;
+    const currentPrompt = bank[currentEarIndex % bank.length];
     const isCorrect = chosenOption === currentPrompt.label;
 
     const newScore = isCorrect ? earScore + 1 : earScore;
@@ -243,24 +244,27 @@ export default function App() {
     setEarAttempts(newAttempts);
 
     if (isCorrect) {
-      setEarFeedback('✅ Correct! Perfect pitch accuracy.');
+      setEarFeedback('✅ Correct! Excellent ear accuracy.');
     } else {
-      setEarFeedback(`❌ Incorrect. The correct answer was "${currentPrompt.label}".`);
+      setEarFeedback(`❌ Incorrect. The right answer was "${currentPrompt.label}".`);
     }
 
     if (newScore === 20 && newAttempts === 20) {
       setShowCelebrationModal(true);
     }
 
-    // Load next random prompt
     setTimeout(() => {
-      let nextIndex = Math.floor(Math.random() * EAR_PROMPTS_BANK.length);
-      if (nextIndex === currentEarIndex) {
-        nextIndex = (nextIndex + 1) % EAR_PROMPTS_BANK.length;
-      }
+      const nextIndex = Math.floor(Math.random() * bank.length);
       setCurrentEarIndex(nextIndex);
       setEarFeedback('');
     }, 1500);
+  };
+
+  const resetEarStats = () => {
+    setEarScore(0);
+    setEarAttempts(0);
+    setEarFeedback('Progress reset.');
+    setTimeout(() => setEarFeedback(''), 1500);
   };
 
   const handleFvaQuizAnswer = (chosenIndex) => {
@@ -288,13 +292,6 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/students`);
       if (res.ok) setStudents(await res.json());
-    } catch (e) { console.error(e); }
-  };
-
-  const fetchEvents = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/events`);
-      if (res.ok) setEventsList(await res.json());
     } catch (e) { console.error(e); }
   };
 
@@ -453,7 +450,6 @@ export default function App() {
     </div>
   );
 
-  // LOGIN SCREEN
   if (!currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-4">
@@ -502,7 +498,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
-      {/* HEADER WITH MODE TOGGLE */}
       <header className="flex justify-between items-center border-b border-teal-900/60 pb-4 mb-6">
         <div className="flex items-center space-x-3">
           <img
@@ -532,7 +527,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* CELEBRATION MODAL */}
       {showCelebrationModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-teal-500 p-8 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl">
@@ -544,13 +538,12 @@ export default function App() {
         </div>
       )}
 
-      {/* DIRECTOR VIEW */}
       {(role === 'director' && viewMode === 'director') ? (
         <div className="space-y-6">
           <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
             {[
               { id: 'welcome', label: '🏠 Welcome Hub' },
-              { id: 'risers', label: '🎶 Stage Riser Map' },
+              { id: 'risers', label: '🎶 Arc Riser Map' },
               { id: 'fva', label: '📖 FVA Terms' },
               { id: 'eartraining', label: '👂 Ear Training Studio' },
               { id: 'absences', label: '📝 Absence Form' },
@@ -593,31 +586,52 @@ export default function App() {
             </div>
           )}
 
+          {/* STAGE ARC RISER FORMATION (6 ACROSS HORIZONTAL CURVE) */}
           {directorTab === 'risers' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6">
               <div className="flex justify-between items-center">
-                <h3 className="text-lg font-bold text-teal-400">🎶 Stage Riser Charts</h3>
+                <h3 className="text-lg font-bold text-teal-400">🎶 Stage Curved Arc Riser Layout</h3>
                 <div className="flex gap-2">
-                  <button onClick={() => setRiserDisplayView('full')} className={`px-3 py-1.5 rounded text-xs font-bold ${riserDisplayView === 'full' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Full Stage Overview</button>
+                  <button onClick={() => setRiserDisplayView('full')} className={`px-3 py-1.5 rounded text-xs font-bold ${riserDisplayView === 'full' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Full Stage Arc</button>
                   <button onClick={() => setRiserDisplayView('section')} className={`px-3 py-1.5 rounded text-xs font-bold ${riserDisplayView === 'section' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Section Detail View</button>
                 </div>
               </div>
 
               {riserDisplayView === 'full' ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {RISER_SECTIONS.map(sec => (
-                    <div key={sec.id} className={`p-4 rounded-xl border ${sec.color} space-y-2`}>
-                      <h4 className="font-bold text-xs uppercase">{sec.name}</h4>
-                      <div className="space-y-1 text-[10px] font-mono">
-                        {[4, 3, 2, 1].map(row => (
-                          <div key={row} className="flex justify-between bg-black/40 p-1 rounded">
-                            <span>Row {row}</span>
-                            <span>{Object.keys(riserAssignments).filter(k => k.startsWith(`${sec.id}-R${row}`)).length} / 4 Filled</span>
-                          </div>
-                        ))}
+                <div className="space-y-6">
+                  {/* HORIZONTAL ARC LAYOUT: RISERS A-F IN A CURVE */}
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3 pt-4 border-b border-slate-800 pb-6">
+                    {RISER_SECTIONS.slice(0, 6).map(sec => (
+                      <div key={sec.id} className={`p-3 rounded-xl border ${sec.color} ${sec.rotation} transform transition space-y-2`}>
+                        <h4 className="font-bold text-[11px] uppercase text-center">{sec.name}</h4>
+                        <div className="space-y-1 text-[10px] font-mono">
+                          {[4, 3, 2, 1].map(row => (
+                            <div key={row} className="flex justify-between bg-black/40 p-1 rounded">
+                              <span>Row {row}</span>
+                              <span>{Object.keys(riserAssignments).filter(k => k.startsWith(`${sec.id}-R${row}`)).length}/4</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+
+                  {/* OVERFLOW REAR & FLOOR LEVEL */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl mx-auto">
+                    {RISER_SECTIONS.slice(6).map(sec => (
+                      <div key={sec.id} className={`p-3 rounded-xl border ${sec.color} space-y-2`}>
+                        <h4 className="font-bold text-[11px] uppercase text-center">{sec.name}</h4>
+                        <div className="space-y-1 text-[10px] font-mono">
+                          {[4, 3, 2, 1].map(row => (
+                            <div key={row} className="flex justify-between bg-black/40 p-1 rounded">
+                              <span>Row {row}</span>
+                              <span>{Object.keys(riserAssignments).filter(k => k.startsWith(`${sec.id}-R${row}`)).length}/4</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -711,14 +725,22 @@ export default function App() {
             </div>
           )}
 
-          {/* EAR TRAINING STUDIO WITH SHUFFLED OPTIONS & MATCHED AUDIO */}
+          {/* EAR TRAINING STUDIO (INTERVALS VS CHORD QUALITY WITH RESET BUTTON) */}
           {directorTab === 'eartraining' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-xl mx-auto text-center">
-              <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => { setEarCategory('intervals'); setCurrentEarIndex(0); }} className={`px-3 py-1 rounded text-xs font-bold ${earCategory === 'intervals' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Intervals</button>
+                  <button onClick={() => { setEarCategory('chords'); setCurrentEarIndex(0); }} className={`px-3 py-1 rounded text-xs font-bold ${earCategory === 'chords' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Chord Quality</button>
+                </div>
+              </div>
 
-              <div className="flex justify-between text-xs font-mono bg-slate-950 p-3 rounded border border-slate-800">
-                <span>Total Attempts: {earAttempts}</span>
-                <span className="text-teal-400 font-bold">Score: {earScore} / {earAttempts}</span>
+              <div className="flex justify-between items-center text-xs font-mono bg-slate-950 p-3 rounded border border-slate-800">
+                <div>
+                  <span>Attempts: {earAttempts}</span> • <span className="text-teal-400 font-bold">Score: {earScore} / {earAttempts}</span>
+                </div>
+                <button onClick={resetEarStats} className="bg-slate-800 hover:bg-rose-950 text-rose-300 border border-slate-700 px-2 py-1 rounded text-[10px] font-bold">🔄 Reset Stats</button>
               </div>
 
               {earFeedback && <p className="text-xs font-bold text-teal-300">{earFeedback}</p>}
@@ -728,7 +750,7 @@ export default function App() {
               </button>
 
               <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
-                <p className="text-sm font-semibold text-white">Identify the interval played above:</p>
+                <p className="text-sm font-semibold text-white">Identify the {earCategory === 'intervals' ? 'interval' : 'chord quality'} played above:</p>
                 <div className="grid grid-cols-2 gap-3">
                   {shuffledEarOptions.map((opt, idx) => (
                     <button
@@ -865,7 +887,7 @@ export default function App() {
           {directorTab === 'absences' && <AbsenceRequestModule />}
         </div>
       ) : (
-        /* STUDENT VIEW OR DIRECTOR STUDENT PREVIEW */
+        /* STUDENT VIEW OR DIRECTOR PREVIEW */
         <div className="space-y-6 max-w-4xl mx-auto">
           <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
             <button onClick={() => setStudentTab('home')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'home' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🏠 Home & Riser Seat</button>
@@ -1038,11 +1060,19 @@ export default function App() {
 
           {studentTab === 'eartraining' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-xl mx-auto text-center">
-              <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => { setEarCategory('intervals'); setCurrentEarIndex(0); }} className={`px-3 py-1 rounded text-xs font-bold ${earCategory === 'intervals' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Intervals</button>
+                  <button onClick={() => { setEarCategory('chords'); setCurrentEarIndex(0); }} className={`px-3 py-1 rounded text-xs font-bold ${earCategory === 'chords' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Chord Quality</button>
+                </div>
+              </div>
 
-              <div className="flex justify-between text-xs font-mono bg-slate-950 p-3 rounded border border-slate-800">
-                <span>Total Attempts: {earAttempts}</span>
-                <span className="text-teal-400 font-bold">Score: {earScore} / {earAttempts}</span>
+              <div className="flex justify-between items-center text-xs font-mono bg-slate-950 p-3 rounded border border-slate-800">
+                <div>
+                  <span>Attempts: {earAttempts}</span> • <span className="text-teal-400 font-bold">Score: {earScore} / {earAttempts}</span>
+                </div>
+                <button onClick={resetEarStats} className="bg-slate-800 hover:bg-rose-950 text-rose-300 border border-slate-700 px-2 py-1 rounded text-[10px] font-bold">🔄 Reset Stats</button>
               </div>
 
               {earFeedback && <p className="text-xs font-bold text-teal-300">{earFeedback}</p>}
@@ -1052,7 +1082,7 @@ export default function App() {
               </button>
 
               <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
-                <p className="text-sm font-semibold text-white">Identify the interval played above:</p>
+                <p className="text-sm font-semibold text-white">Identify the {earCategory === 'intervals' ? 'interval' : 'chord quality'} played above:</p>
                 <div className="grid grid-cols-2 gap-3">
                   {shuffledEarOptions.map((opt, idx) => (
                     <button
