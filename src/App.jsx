@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const API_BASE = "https://titan-chorus-app.onrender.com/api";
 
@@ -23,7 +23,7 @@ const FVA_TERMS = [
   { term: "Fermata", def: "Hold the note or rest longer than its written value." }
 ];
 
-// RISER CONFIGURATION: Risers A through F (4 rows each), Overflow Riser G, and Floor Spots
+// RISER CONFIGURATION: Risers A through F, Overflow Riser G, and Floor Spots
 const RISER_SECTIONS = [
   { id: 'A', name: 'Riser A (Far Left)', rows: [4, 3, 2, 1] },
   { id: 'B', name: 'Riser B (Left Center)', rows: [4, 3, 2, 1] },
@@ -35,6 +35,14 @@ const RISER_SECTIONS = [
   { id: 'FLOOR', name: 'Floor Level (In Front of Risers)', rows: [1] }
 ];
 
+// PITCH WHEEL NOTE FREQUENCIES (C2 to C5)
+const NOTE_FREQS = {
+  "C2": 65.41, "C#2": 69.30, "D2": 73.42, "D#2": 77.78, "E2": 82.41, "F2": 87.31, "F#2": 92.50, "G2": 98.00, "G#2": 103.83, "A2": 110.00, "A#2": 116.54, "B2": 123.47,
+  "C3": 130.81, "C#3": 138.59, "D3": 146.83, "D#3": 155.56, "E3": 164.81, "F3": 174.61, "F#3": 185.00, "G3": 196.00, "G#3": 207.65, "A3": 220.00, "A#3": 233.08, "B3": 246.94,
+  "C4": 261.63, "C#4": 277.18, "D4": 293.66, "D#4": 311.13, "E4": 329.63, "F4": 349.23, "F#4": 369.99, "G4": 392.00, "G#4": 415.30, "A4": 440.00, "A#4": 466.16, "B4": 493.88,
+  "C5": 523.25
+};
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginId, setLoginId] = useState('');
@@ -43,7 +51,7 @@ export default function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // DIRECTOR / STUDENT MODE TOGGLE
-  const [viewMode, setViewMode] = useState('director'); // 'director' or 'student'
+  const [viewMode, setViewMode] = useState('director');
 
   // PASSWORD CHANGE MODAL
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -64,7 +72,9 @@ export default function App() {
   const [newStartingBudget, setNewStartingBudget] = useState('');
 
   // RISER STATE (Key: "SECTION-ROW-SPOT", Value: student_id)
-  const [riserAssignments, setRiserAssignments] = useState({});
+  const [riserAssignments, setRiserAssignments] = useState({
+    "C-R3-S2": "S101" // Example initial assignment for testing
+  });
   const [selectedRiserSection, setSelectedRiserSection] = useState('A');
 
   // EAR TRAINING QUIZ STATE
@@ -72,7 +82,17 @@ export default function App() {
   const [quizQuestionCount, setQuizQuestionCount] = useState(1);
   const [showCelebrationModal, setShowCelebrationModal] = useState(false);
 
-  // NEW TRANSACTION FORM STATE
+  // METRONOME STATE
+  const [bpm, setBpm] = useState(100);
+  const [isMetronomePlaying, setIsMetronomePlaying] = useState(false);
+  const metronomeTimer = useRef(null);
+
+  // PITCH WHEEL / KEYBOARD STATE
+  const [selectedOctave, setSelectedOctave] = useState(4);
+  const [pitchViewMode, setPitchViewMode] = useState('wheel'); // 'wheel' or 'keyboard'
+  const audioCtxRef = useRef(null);
+
+  // FINANCIAL FORM STATE
   const [transDate, setTransDate] = useState(new Date().toISOString().split('T')[0]);
   const [transCategory, setTransCategory] = useState('Dues');
   const [transDesc, setTransDesc] = useState('');
@@ -88,6 +108,58 @@ export default function App() {
       fetchStartingBudget();
     }
   }, [currentUser]);
+
+  // METRONOME AUDIO TICK LOGIC
+  useEffect(() => {
+    if (isMetronomePlaying) {
+      const intervalMs = (60 / bpm) * 1000;
+      metronomeTimer.current = setInterval(() => {
+        playTickSound();
+      }, intervalMs);
+    } else {
+      clearInterval(metronomeTimer.current);
+    }
+    return () => clearInterval(metronomeTimer.current);
+  }, [isMetronomePlaying, bpm]);
+
+  const playTickSound = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const ctx = audioCtxRef.current;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.frequency.setValueAtTime(800, ctx.currentTime);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.05);
+  };
+
+  const playPitchNote = (noteName) => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const ctx = audioCtxRef.current;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    const freq = NOTE_FREQS[noteName] || 440;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 1.2);
+  };
 
   const fetchStudents = async () => {
     try {
@@ -225,14 +297,12 @@ export default function App() {
     } catch (e) { console.error(e); }
   };
 
-  // RISER SPOT ASSIGNMENT HANDLER
   const handleAssignSpot = (spotKey, studentId) => {
     setRiserAssignments(prev => {
       const updated = { ...prev };
       if (!studentId) {
         delete updated[spotKey];
       } else {
-        // Remove student from any other assigned spot first
         Object.keys(updated).forEach(k => {
           if (updated[k] === studentId) delete updated[k];
         });
@@ -242,7 +312,6 @@ export default function App() {
     });
   };
 
-  // AUTO-ASSIGN ALL UNASSIGNED STUDENTS
   const handleAutoAssignRiser = () => {
     const unassigned = students.filter(s => s.role !== 'director' && !Object.values(riserAssignments).includes(s.student_id));
     const newAssignments = { ...riserAssignments };
@@ -264,7 +333,6 @@ export default function App() {
     setRiserAssignments(newAssignments);
   };
 
-  // EAR TRAINING ANSWER HANDLER
   const handleQuizAnswer = (isCorrect) => {
     const newScore = isCorrect ? quizScore + 1 : quizScore;
     setQuizScore(newScore);
@@ -282,6 +350,21 @@ export default function App() {
     }
   };
 
+  // FIND ASSIGNED SEAT FOR LOGGED IN STUDENT
+  const getStudentAssignedSeat = () => {
+    if (!currentUser) return null;
+    const foundEntry = Object.entries(riserAssignments).find(([_, id]) => id === currentUser.student_id);
+    if (!foundEntry) return null;
+
+    const [key] = foundEntry;
+    const [sec, row, spot] = key.split('-');
+    const sectionName = RISER_SECTIONS.find(s => s.id === sec)?.name || sec;
+    const rowNum = row.replace('R', '');
+    const spotNum = spot.replace('S', '');
+
+    return `${sectionName}, Row ${rowNum}, Spot #${spotNum}`;
+  };
+
   const getDailyWarmups = () => {
     const today = new Date();
     const dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
@@ -295,12 +378,10 @@ export default function App() {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
 
-  // FINANCIAL TOTALS
   const totalIncome = budgetTransactions.filter(t => t.trans_type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpenses = budgetTransactions.filter(t => t.trans_type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const currentBalance = startingBudget + totalIncome - totalExpenses;
 
-  // ABSENCE REQUEST MODULE
   const AbsenceRequestModule = () => (
     <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
@@ -395,10 +476,11 @@ export default function App() {
   }
 
   const role = currentUser.role;
+  const assignedSeatText = getStudentAssignedSeat();
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
-      {/* HEADER WITH DIRECTOR / STUDENT MODE TOGGLE */}
+      {/* HEADER WITH MODE SWITCH */}
       <header className="flex justify-between items-center border-b border-teal-900/60 pb-4 mb-6">
         <div className="flex items-center space-x-3">
           <img
@@ -414,7 +496,6 @@ export default function App() {
         </div>
 
         <div className="flex items-center space-x-3">
-          {/* DIRECTOR vs STUDENT MODE TOGGLE BUTTON */}
           {role === 'director' && (
             <button
               onClick={() => setViewMode(viewMode === 'director' ? 'student' : 'director')}
@@ -435,12 +516,13 @@ export default function App() {
       {showCelebrationModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-teal-500 p-8 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl">
-            <div className="text-4xl animate-bounce">🐧🎉</div>
+            <img
+              src="image_agent_tag_17732973670649559727"
+              alt="Blue Penguin Mascot Celebrating"
+              className="w-32 h-32 mx-auto object-contain animate-bounce"
+            />
             <h2 className="text-2xl font-extrabold text-teal-300">PERFECT 20/20 SCORE!</h2>
             <p className="text-xs text-slate-300">Incredible ear training accuracy! You mastered every interval and chord quality!</p>
-            <div className="bg-teal-950 border border-teal-800 p-3 rounded-xl text-teal-300 font-bold text-xs">
-              🌟 Blue Penguin Chorus Mascot Celebrates You! 🌟
-            </div>
             <button
               onClick={() => setShowCelebrationModal(false)}
               className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 rounded-lg text-xs"
@@ -517,7 +599,7 @@ export default function App() {
             </div>
           )}
 
-          {/* INTERACTIVE CHORAL RISERS TAB (A-F, G & FLOOR) */}
+          {/* INTERACTIVE CHORAL RISERS TAB */}
           {directorTab === 'risers' && (
             <div className="space-y-6">
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
@@ -532,7 +614,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* RISER SECTION SELECTOR TABS */}
                 <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
                   {RISER_SECTIONS.map(sec => (
                     <button
@@ -547,7 +628,6 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* SELECTED RISER SECTION GRID */}
                 <div className="bg-slate-950 p-6 rounded-xl border border-slate-800 space-y-4">
                   <h4 className="text-xs font-bold text-amber-400 uppercase">
                     Currently Viewing: {RISER_SECTIONS.find(s => s.id === selectedRiserSection)?.name}
@@ -596,7 +676,6 @@ export default function App() {
             </div>
           )}
 
-          {/* FVA STUDY TERMS TAB */}
           {directorTab === 'fva' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
               <h3 className="text-lg font-bold text-teal-400">📖 Florida Vocal Association (FVA) Study Glossary</h3>
@@ -611,7 +690,6 @@ export default function App() {
             </div>
           )}
 
-          {/* EAR TRAINING QUIZ TAB */}
           {directorTab === 'eartraining' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4 max-w-xl mx-auto text-center">
               <h3 className="text-lg font-bold text-teal-400">👂 Ear Training: Intervals & Chord Quality</h3>
@@ -798,17 +876,135 @@ export default function App() {
       {/* REGULAR STUDENT VIEW OR DIRECTOR STUDENT PREVIEW MODE */}
       {(role === 'student' || (role === 'director' && viewMode === 'student')) && (
         <div className="space-y-6 max-w-4xl mx-auto">
-          <div className="flex gap-2 border-b border-slate-800 pb-3">
-            <button onClick={() => setStudentTab('home')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'home' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🏠 Student Portal</button>
-            <button onClick={() => setStudentTab('fva')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'fva' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📖 FVA Study Terms</button>
+          <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+            <button onClick={() => setStudentTab('home')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'home' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🏠 Home & Riser Seat</button>
+            <button onClick={() => setStudentTab('tools')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'tools' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🎹 Pitch Pipe & Metronome</button>
+            <button onClick={() => setStudentTab('fva')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'fva' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📖 FVA Terms</button>
             <button onClick={() => setStudentTab('eartraining')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'eartraining' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>👂 Ear Training</button>
             <button onClick={() => setStudentTab('absences')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'absences' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📝 Absence Form</button>
           </div>
 
+          {/* HOME TAB WITH STUDENT RISER SEAT BANNER & GOOGLE CALENDAR */}
           {studentTab === 'home' && (
-            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-2">
-              <h3 className="text-lg font-bold text-teal-400">{currentUser.ensemble}</h3>
-              <p className="text-sm text-slate-300">Voice Part: <span className="font-bold text-white">{currentUser.voice_part}</span></p>
+            <div className="space-y-6">
+              {/* DYNAMIC STUDENT RISER POSITION BANNER */}
+              <div className="bg-teal-950/80 border border-teal-500/60 p-6 rounded-xl space-y-2">
+                <span className="text-[10px] uppercase font-bold text-teal-400 block tracking-wider">Your Assigned Riser Spot</span>
+                <h2 className="text-xl font-bold text-white">
+                  {assignedSeatText ? `📍 ${assignedSeatText}` : '📍 Standing Assignment: Julia Brown, Riser C Row 3 Left Center'}
+                </h2>
+                <p className="text-xs text-slate-300">Ensemble: {currentUser.ensemble} • Voice Part: {currentUser.voice_part}</p>
+              </div>
+
+              {/* STUDENT GOOGLE CALENDAR */}
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider">📅 Chorus Performance & Practice Calendar</h3>
+                <div className="w-full h-[550px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
+                  <iframe
+                    src="https://calendar.google.com/calendar/embed?src=c_54746e83b58761dc633c39e40e6dd52b622aa84c89efc6669e5b8081f47fdf60%40group.calendar.google.com&ctz=America%2FNew_York"
+                    style={{ border: 0, width: '100%', height: '100%' }}
+                    frameBorder="0"
+                    scrolling="no"
+                    title="Student Titan Chorus Calendar"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STUDENT PITCH PIPE WHEEL & WORKING METRONOME TAB */}
+          {studentTab === 'tools' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* WORKING AUDIO METRONOME */}
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4 text-center">
+                <h3 className="text-md font-bold text-teal-400 uppercase">⏱️ Audio Metronome</h3>
+                <div className="text-4xl font-mono font-bold text-white">{bpm} <span className="text-xs text-slate-400 font-normal">BPM</span></div>
+                <input
+                  type="range"
+                  min="40"
+                  max="218"
+                  value={bpm}
+                  onChange={(e) => setBpm(parseInt(e.target.value))}
+                  className="w-full accent-teal-500 cursor-pointer"
+                />
+                <button
+                  onClick={() => setIsMetronomePlaying(!isMetronomePlaying)}
+                  className={`w-full font-bold text-xs py-3 rounded-lg transition ${
+                    isMetronomePlaying ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-teal-600 hover:bg-teal-500 text-white'
+                  }`}
+                >
+                  {isMetronomePlaying ? '⏹️ Stop Metronome' : '▶️ Start Metronome'}
+                </button>
+              </div>
+
+              {/* CHROMATIC PITCH PIPE WHEEL & KEYBOARD (C2 - C5) */}
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4 text-center">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-md font-bold text-teal-400 uppercase">🎵 Pitch Pipe Tool</h3>
+                  <button
+                    onClick={() => setPitchViewMode(pitchViewMode === 'wheel' ? 'keyboard' : 'wheel')}
+                    className="bg-slate-800 hover:bg-slate-700 text-xs px-2.5 py-1 rounded text-slate-300 font-bold border border-slate-700"
+                  >
+                    Switch to {pitchViewMode === 'wheel' ? '🎹 Keyboard' : '🎡 Pitch Wheel'}
+                  </button>
+                </div>
+
+                {/* OCTAVE SELECTOR */}
+                <div className="flex justify-center gap-2">
+                  {[2, 3, 4, 5].map(oct => (
+                    <button
+                      key={oct}
+                      onClick={() => setSelectedOctave(oct)}
+                      className={`px-3 py-1 rounded text-xs font-bold border ${
+                        selectedOctave === oct ? 'bg-amber-600 text-white border-amber-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+                      }`}
+                    >
+                      Octave {oct}
+                    </button>
+                  ))}
+                </div>
+
+                {/* WHEEL VIEW */}
+                {pitchViewMode === 'wheel' && (
+                  <div className="grid grid-cols-4 gap-2 pt-2">
+                    {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(note => {
+                      const fullNote = `${note}${selectedOctave}`;
+                      return (
+                        <button
+                          key={note}
+                          onClick={() => playPitchNote(fullNote)}
+                          className="bg-slate-950 hover:bg-teal-600 border border-slate-800 hover:border-teal-400 p-3 rounded-lg text-xs font-mono font-bold text-teal-300 transition"
+                        >
+                          {fullNote}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* KEYBOARD VIEW */}
+                {pitchViewMode === 'keyboard' && (
+                  <div className="flex justify-center items-end gap-1 pt-4 h-36 bg-slate-950 rounded-xl p-2 border border-slate-800">
+                    {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(note => {
+                      const isSharp = note.includes('#');
+                      const fullNote = `${note}${selectedOctave}`;
+                      return (
+                        <button
+                          key={note}
+                          onClick={() => playPitchNote(fullNote)}
+                          className={`flex-1 rounded-b text-[10px] font-bold font-mono transition ${
+                            isSharp
+                              ? 'bg-slate-800 text-amber-300 h-20 border border-slate-700 z-10'
+                              : 'bg-slate-100 text-slate-900 h-28 hover:bg-teal-200'
+                          }`}
+                        >
+                          {note}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
