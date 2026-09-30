@@ -66,8 +66,9 @@ class FinancialTransaction(db.Model):
     trans_date = db.Column(db.String(20), nullable=False)
     category = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(255), nullable=False)
-    trans_type = db.Column(db.String(20), nullable=False)
+    trans_type = db.Column(db.String(20), nullable=False)  # 'income' or 'expense'
     amount = db.Column(db.Float, nullable=False)
+    student_id = db.Column(db.String(50), nullable=True)   # Linked student ID
     school_year = db.Column(db.String(20), default='2026-2027')
 
     def to_dict(self):
@@ -78,6 +79,19 @@ class FinancialTransaction(db.Model):
             "description": self.description,
             "trans_type": self.trans_type,
             "amount": self.amount,
+            "student_id": self.student_id,
+            "school_year": self.school_year
+        }
+
+class ProgramSettings(db.Model):
+    __tablename__ = 'program_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    starting_budget = db.Column(db.Float, default=0.0)
+    school_year = db.Column(db.String(20), default='2026-2027')
+
+    def to_dict(self):
+        return {
+            "starting_budget": self.starting_budget,
             "school_year": self.school_year
         }
 
@@ -99,7 +113,12 @@ with app.app_context():
                 voice_part='Director'
             )
             db.session.add(admin)
-            db.session.commit()
+            
+        settings = ProgramSettings.query.first()
+        if not settings:
+            db.session.add(ProgramSettings(starting_budget=5000.0, school_year='2026-2027'))
+            
+        db.session.commit()
     except Exception as e:
         db.session.rollback()
 
@@ -153,7 +172,7 @@ def get_students():
 def update_student_role():
     data = request.get_json() or {}
     student_id = data.get('student_id')
-    new_role = data.get('role')  # 'clc', 'student', 'alumni'
+    new_role = data.get('role')
 
     user = User.query.filter_by(student_id=student_id).first()
     if not user:
@@ -167,43 +186,57 @@ def update_student_role():
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
 
-@app.route('/api/students/payment', methods=['POST'])
-def update_student_payment():
-    data = request.get_json() or {}
-    student_id = data.get('student_id')
-    amount = data.get('amount')
-
-    user = User.query.filter_by(student_id=student_id).first()
-    if not user:
-        return jsonify({"success": False, "message": "User not found"}), 404
-
-    try:
-        user.dues_paid_amount = float(amount)
-        db.session.commit()
-        return jsonify({"success": True, "user": user.to_dict()}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
-
 @app.route('/api/events', methods=['GET'])
 def get_events():
     events = Event.query.all()
     return jsonify([e.to_dict() for e in events]), 200
+
+@app.route('/api/budget/starting', methods=['GET', 'POST'])
+def handle_starting_budget():
+    settings = ProgramSettings.query.first()
+    if not settings:
+        settings = ProgramSettings(starting_budget=0.0)
+        db.session.add(settings)
+        db.session.commit()
+
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        try:
+            settings.starting_budget = float(data.get('starting_budget', 0.0))
+            db.session.commit()
+            return jsonify({"success": True, "starting_budget": settings.starting_budget}), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"success": False, "message": str(e)}), 500
+
+    return jsonify({"starting_budget": settings.starting_budget}), 200
 
 @app.route('/api/budget', methods=['GET', 'POST'])
 def handle_budget():
     if request.method == 'POST':
         data = request.get_json() or {}
         try:
+            student_id = data.get('student_id')
+            amount = float(data.get('amount', 0))
+            trans_type = data.get('trans_type')
+
             trans = FinancialTransaction(
                 trans_date=data.get('trans_date'),
                 category=data.get('category'),
                 description=data.get('description'),
-                trans_type=data.get('trans_type'),
-                amount=float(data.get('amount', 0)),
+                trans_type=trans_type,
+                amount=amount,
+                student_id=student_id if student_id else None,
                 school_year=data.get('school_year', '2026-2027')
             )
             db.session.add(trans)
+
+            # Automatically recalculate student's total dues paid if payment linked
+            if student_id and trans_type == 'income':
+                student = User.query.filter_by(student_id=student_id).first()
+                if student:
+                    student.dues_paid_amount = (student.dues_paid_amount or 0.0) + amount
+
             db.session.commit()
             return jsonify({"success": True, "transaction": trans.to_dict()}), 201
         except Exception as e:
