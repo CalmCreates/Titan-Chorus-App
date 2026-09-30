@@ -23,12 +23,16 @@ const FVA_TERMS = [
   { term: "Fermata", def: "Hold the note or rest longer than its written value." }
 ];
 
+// EAR TRAINING PROMPTS BANK WITH SPECIFIC ROOT AND TARGET PITCHES
 const EAR_PROMPTS_BANK = [
   { root: "C4", target: "G4", label: "Perfect 5th", options: ["Perfect 5th", "Major 3rd", "Minor 7th", "Perfect 4th"] },
   { root: "C4", target: "E4", label: "Major 3rd", options: ["Major 3rd", "Perfect 5th", "Octave", "Minor 3rd"] },
   { root: "C4", target: "F4", label: "Perfect 4th", options: ["Perfect 4th", "Perfect 5th", "Major 6th", "Major 2nd"] },
   { root: "C4", target: "B4", label: "Major 7th", options: ["Major 7th", "Minor 7th", "Perfect 5th", "Octave"] },
-  { root: "C4", target: "C5", label: "Octave", options: ["Octave", "Perfect 5th", "Major 7th", "Major 3rd"] }
+  { root: "C4", target: "C5", label: "Octave", options: ["Octave", "Perfect 5th", "Major 7th", "Major 3rd"] },
+  { root: "C4", target: "D4", label: "Major 2nd", options: ["Major 2nd", "Minor 3rd", "Perfect 4th", "Perfect 5th"] },
+  { root: "C4", target: "D#4", label: "Minor 3rd", options: ["Minor 3rd", "Major 3rd", "Perfect 5th", "Minor 7th"] },
+  { root: "C4", target: "A4", label: "Major 6th", options: ["Major 6th", "Perfect 5th", "Major 7th", "Octave"] }
 ];
 
 const RISER_SECTIONS = [
@@ -49,6 +53,16 @@ const NOTE_FREQS = {
   "C5": 523.25
 };
 
+// SHUFFLE HELPER UTILITY (FISHER-YATES SHUFFLE)
+const shuffleArray = (array) => {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+};
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginId, setLoginId] = useState('');
@@ -58,11 +72,6 @@ export default function App() {
 
   // VIEW MODE & NAVIGATION
   const [viewMode, setViewMode] = useState('director');
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [oldPass, setOldPass] = useState('');
-  const [newPass, setNewPass] = useState('');
-  const [passUpdateMsg, setPassUpdateMsg] = useState('');
-
   const [directorTab, setDirectorTab] = useState('welcome');
   const [studentTab, setStudentTab] = useState('home');
 
@@ -87,10 +96,11 @@ export default function App() {
   const [fvaCurrentQuestionIndex, setFvaCurrentQuestionIndex] = useState(0);
   const [fvaFeedback, setFvaFeedback] = useState('');
 
-  // EAR TRAINING STATE
+  // EAR TRAINING STATE WITH SHUFFLED OPTIONS
   const [earScore, setEarScore] = useState(0);
   const [earAttempts, setEarAttempts] = useState(0);
   const [currentEarIndex, setCurrentEarIndex] = useState(0);
+  const [shuffledEarOptions, setShuffledEarOptions] = useState([]);
   const [earFeedback, setEarFeedback] = useState('');
   const [showCelebrationModal, setShowCelebrationModal] = useState(false);
 
@@ -118,6 +128,14 @@ export default function App() {
       fetchStartingBudget();
     }
   }, [currentUser]);
+
+  // SHUFFLE EAR OPTIONS WHENEVER THE PROMPT INDEX CHANGES
+  useEffect(() => {
+    const currentPrompt = EAR_PROMPTS_BANK[currentEarIndex];
+    if (currentPrompt) {
+      setShuffledEarOptions(shuffleArray(currentPrompt.options));
+    }
+  }, [currentEarIndex]);
 
   useEffect(() => {
     if (isMetronomePlaying) {
@@ -225,9 +243,9 @@ export default function App() {
     setEarAttempts(newAttempts);
 
     if (isCorrect) {
-      setEarFeedback('✅ Correct! Excellent listening.');
+      setEarFeedback('✅ Correct! Perfect pitch accuracy.');
     } else {
-      setEarFeedback(`❌ Incorrect. The right answer was ${currentPrompt.label}.`);
+      setEarFeedback(`❌ Incorrect. The correct answer was "${currentPrompt.label}".`);
     }
 
     if (newScore === 20 && newAttempts === 20) {
@@ -236,7 +254,10 @@ export default function App() {
 
     // Load next random prompt
     setTimeout(() => {
-      const nextIndex = Math.floor(Math.random() * EAR_PROMPTS_BANK.length);
+      let nextIndex = Math.floor(Math.random() * EAR_PROMPTS_BANK.length);
+      if (nextIndex === currentEarIndex) {
+        nextIndex = (nextIndex + 1) % EAR_PROMPTS_BANK.length;
+      }
       setCurrentEarIndex(nextIndex);
       setEarFeedback('');
     }, 1500);
@@ -253,10 +274,9 @@ export default function App() {
     if (isCorrect) {
       setFvaFeedback('✅ Correct!');
     } else {
-      setFvaFeedback(`❌ Incorrect. Correct definition: "${FVA_TERMS[fvaCurrentQuestionIndex].def}"`);
+      setFvaFeedback(`❌ Incorrect. Definition: "${FVA_TERMS[fvaCurrentQuestionIndex].def}"`);
     }
 
-    // Load next random question
     setTimeout(() => {
       const nextQ = Math.floor(Math.random() * FVA_TERMS.length);
       setFvaCurrentQuestionIndex(nextQ);
@@ -573,7 +593,6 @@ export default function App() {
             </div>
           )}
 
-          {/* COLOR-CODED RISER MAP */}
           {directorTab === 'risers' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6">
               <div className="flex justify-between items-center">
@@ -639,7 +658,6 @@ export default function App() {
             </div>
           )}
 
-          {/* FVA STUDY TERMS WITH SCORE & DYNAMIC PROMPTS */}
           {directorTab === 'fva' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-2xl mx-auto">
               <div className="flex justify-between items-center border-b border-slate-800 pb-3">
@@ -693,7 +711,7 @@ export default function App() {
             </div>
           )}
 
-          {/* EAR TRAINING STUDIO WITH DYNAMIC PROMPTS & SCORE COUNTER */}
+          {/* EAR TRAINING STUDIO WITH SHUFFLED OPTIONS & MATCHED AUDIO */}
           {directorTab === 'eartraining' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-xl mx-auto text-center">
               <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
@@ -712,7 +730,7 @@ export default function App() {
               <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
                 <p className="text-sm font-semibold text-white">Identify the interval played above:</p>
                 <div className="grid grid-cols-2 gap-3">
-                  {EAR_PROMPTS_BANK[currentEarIndex].options.map((opt, idx) => (
+                  {shuffledEarOptions.map((opt, idx) => (
                     <button
                       key={idx}
                       onClick={() => handleEarAnswer(opt)}
@@ -726,7 +744,6 @@ export default function App() {
             </div>
           )}
 
-          {/* RESTORED PROGRAM FINANCES TAB */}
           {directorTab === 'budget' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1037,7 +1054,7 @@ export default function App() {
               <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
                 <p className="text-sm font-semibold text-white">Identify the interval played above:</p>
                 <div className="grid grid-cols-2 gap-3">
-                  {EAR_PROMPTS_BANK[currentEarIndex].options.map((opt, idx) => (
+                  {shuffledEarOptions.map((opt, idx) => (
                     <button
                       key={idx}
                       onClick={() => handleEarAnswer(opt)}
