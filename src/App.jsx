@@ -398,13 +398,13 @@ export default function App() {
 
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
                 <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider">📅 Titan Chorus Calendar</h3>
-                <div className="w-full h-96 bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
+                <div className="w-full h-[600px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
                   <iframe
-                    src="https://calendar.google.com/calendar/embed?src=en.usa%23holiday%40group.v.calendar.google.com&ctz=America%2FNew_York"
+                    src="https://calendar.google.com/calendar/embed?src=c_54746e83b58761dc633c39e40e6dd52b622aa84c89efc6669e5b8081f47fdf60%40group.calendar.google.com&ctz=America%2FNew_York"
                     style={{ border: 0, width: '100%', height: '100%' }}
                     frameBorder="0"
                     scrolling="no"
-                    title="Chorus Calendar"
+                    title="Titan Chorus Calendar"
                   />
                 </div>
               </div>
