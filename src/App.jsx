@@ -28,6 +28,7 @@ export default function App() {
   // TABS
   const [directorTab, setDirectorTab] = useState('welcome');
   const [clcTab, setClcTab] = useState('attendance');
+  const [studentTab, setStudentTab] = useState('home');
 
   // DATA STATES
   const [students, setStudents] = useState([]);
@@ -206,6 +207,41 @@ export default function App() {
   const totalExpenses = budgetTransactions.filter(t => t.trans_type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const currentBalance = startingBudget + totalIncome - totalExpenses;
 
+  // REUSABLE ABSENCE REQUEST COMPONENT
+  const AbsenceRequestModule = () => (
+    <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+        <div>
+          <h3 className="text-lg font-bold text-teal-400">📝 Excused Absence & Leave Request Form</h3>
+          <p className="text-xs text-slate-400">Submit requests for planned absences, illness, or school event conflicts.</p>
+        </div>
+        <a
+          href="https://forms.gle/vphmxYqnLMcVkibL9"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition inline-flex items-center gap-1 shadow"
+        >
+          ↗ Open Form in New Window
+        </a>
+      </div>
+
+      <div className="w-full bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex justify-center py-4">
+        <iframe
+          src="https://docs.google.com/forms/d/e/1FAIpQLSer4jIeMA77VSji0H5Nsmq8dG8Q8aRWLDqQv20MKXYSVeSJ_Q/viewform?embedded=true"
+          width="100%"
+          height="800"
+          frameBorder="0"
+          marginHeight="0"
+          marginWidth="0"
+          className="max-w-2xl w-full"
+          title="Excused Absence Form"
+        >
+          Loading…
+        </iframe>
+      </div>
+    </div>
+  );
+
   // LOGIN SCREEN
   if (!currentUser) {
     return (
@@ -310,13 +346,14 @@ export default function App() {
         </div>
       )}
 
-      {/* DIRECTOR TABS */}
+      {/* DIRECTOR VIEW */}
       {role === 'director' && (
         <div>
           <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3 mb-6">
             {[
               { id: 'welcome', label: '🏠 Welcome Hub' },
-              { id: 'budget', label: '💰 Program Finances & Dues' },
+              { id: 'absences', label: '📝 Absence Requests' },
+              { id: 'budget', label: '💰 Program Finances' },
               { id: 'roster', label: '📋 Roster & Roles' },
               { id: 'attendance', label: '📍 GPS Attendance' },
               { id: 'risers', label: '🎶 Riser Charts' }
@@ -374,10 +411,10 @@ export default function App() {
             </div>
           )}
 
-          {/* BUDGET & FINANCES TAB */}
+          {directorTab === 'absences' && <AbsenceRequestModule />}
+
           {directorTab === 'budget' && (
             <div className="space-y-6">
-              {/* STARTING BUDGET & OVERVIEW STATS */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
                   <span className="text-xs uppercase font-bold text-slate-400 block">Starting Budget</span>
@@ -411,7 +448,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* LOG TRANSACTION / DUES FORM */}
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
                 <h3 className="text-md font-bold text-teal-400">💵 Record Payment or Expense</h3>
                 <form onSubmit={handleAddTransaction} className="grid grid-cols-1 md:grid-cols-6 gap-3">
@@ -454,7 +490,6 @@ export default function App() {
                 </form>
               </div>
 
-              {/* RECENT FINANCIAL LEDGER */}
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
                 <h3 className="text-md font-bold text-teal-400">📜 Financial Ledger</h3>
                 <div className="overflow-x-auto">
@@ -507,7 +542,7 @@ export default function App() {
                       <th className="py-2 px-2">Name</th>
                       <th className="py-2 px-2">Ensemble</th>
                       <th className="py-2 px-2">Role</th>
-                      <th className="py-2 px-2">Total Paid to Date</th>
+                      <th className="py-2 px-2">Total Dues Recorded</th>
                       <th className="py-2 px-2">Access Role Action</th>
                     </tr>
                   </thead>
@@ -566,11 +601,12 @@ export default function App() {
         <div className="space-y-6">
           <div className="bg-amber-950/40 border border-amber-500/50 p-4 rounded-xl">
             <h2 className="text-lg font-bold text-amber-300">⭐ Choir Leadership Council (CLC) Hub</h2>
-            <p className="text-xs text-amber-200/80">Authorized attendance check-in & riser monitoring access.</p>
+            <p className="text-xs text-amber-200/80">Authorized attendance check-in, leave form, & riser monitoring access.</p>
           </div>
 
           <div className="flex gap-2 border-b border-slate-800 pb-3">
             <button onClick={() => setClcTab('attendance')} className={`px-4 py-2 rounded-lg text-xs font-bold ${clcTab === 'attendance' ? 'bg-amber-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📍 GPS Attendance Check</button>
+            <button onClick={() => setClcTab('absences')} className={`px-4 py-2 rounded-lg text-xs font-bold ${clcTab === 'absences' ? 'bg-amber-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📝 Absence Form</button>
             <button onClick={() => setClcTab('risers')} className={`px-4 py-2 rounded-lg text-xs font-bold ${clcTab === 'risers' ? 'bg-amber-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🎶 Riser Maps</button>
           </div>
 
@@ -581,12 +617,33 @@ export default function App() {
             </div>
           )}
 
+          {clcTab === 'absences' && <AbsenceRequestModule />}
+
           {clcTab === 'risers' && (
             <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
               <h3 className="text-sm font-bold text-amber-400 mb-3">Choral Riser Map</h3>
               <p className="text-xs text-slate-400">Verify row positions and voice placements for rehearsals.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* REGULAR STUDENT VIEW */}
+      {role === 'student' && (
+        <div className="space-y-6 max-w-4xl mx-auto">
+          <div className="flex gap-2 border-b border-slate-800 pb-3">
+            <button onClick={() => setStudentTab('home')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'home' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🏠 Student Portal</button>
+            <button onClick={() => setStudentTab('absences')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'absences' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📝 Submit Absence Request</button>
+          </div>
+
+          {studentTab === 'home' && (
+            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-2">
+              <h3 className="text-lg font-bold text-teal-400">{currentUser.ensemble}</h3>
+              <p className="text-sm text-slate-300">Voice Part: <span className="font-bold text-white">{currentUser.voice_part}</span></p>
+            </div>
+          )}
+
+          {studentTab === 'absences' && <AbsenceRequestModule />}
         </div>
       )}
 
@@ -602,14 +659,6 @@ export default function App() {
             <h3 className="text-sm font-bold text-indigo-400 uppercase">💌 Send Thanks & Encouragement to Director Lengua-Miranda</h3>
             <a href="mailto:Cesar.Lengua@ocps.net?subject=Olympia%20Titan%20Chorus%20Alumni%20Note" className="inline-block bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2.5 rounded-lg text-xs">✉️ Write Thank You Email</a>
           </div>
-        </div>
-      )}
-
-      {/* REGULAR STUDENT VIEW */}
-      {role === 'student' && (
-        <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
-          <h3 className="text-lg font-bold text-teal-400 mb-2">{currentUser.ensemble}</h3>
-          <p className="text-sm text-slate-300">Voice Part: {currentUser.voice_part}</p>
         </div>
       )}
     </div>
