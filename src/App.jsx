@@ -9,11 +9,22 @@ const INSPIRATIONAL_QUOTES = [
   { quote: "Singing is the divine way to tell beautiful, poetic things to the heart.", author: "Pablo Casals" }
 ];
 
-const WARMUP_BANK = [
-  { title: "Staccato Arpeggio (1-3-5-3-1)", desc: "Sing 'Sing-ee-sing' on staccato 1-3-5-3-1 to activate diaphragmatic support and light placement." },
-  { title: "Lip Trills / Buzzes (5-4-3-2-1)", desc: "Gentle descending lip trills to relax tension and align breath flow before belt work." },
-  { title: "Vowels Alignment (Mee-May-Mah-Moh-Moo)", desc: "Sustain single pitch per vowel string keeping space open in the back of the pharynx." },
-  { title: "Siren Glide (Octave + Octave)", desc: "Continuous vocal siren from lowest comfortable pitch to head voice peak on 'Ngoo'." }
+const DEFAULT_ENSEMBLE_RULES = [
+  { id: 'p2', period: '2nd Period', name: 'Treble Choir', fee: 55 },
+  { id: 'p3', period: '3rd Period', name: 'Master Singers', fee: 85 },
+  { id: 'p4', period: '4th Period', name: 'Bella Voce', fee: 85 },
+  { id: 'p5', period: '5th Period', name: 'Olympian Voices', fee: 85 },
+  { id: 'p6', period: '6th Period', name: 'Titan Singers', fee: 55 },
+  { id: 'p7', period: '7th Period', name: 'Titan Voices', fee: 55 },
+  { id: 'p8', period: '8th Period', name: 'Chorus Club', fee: 30 }
+];
+
+const VOICE_PARTS_LIST = [
+  'Soprano', 'Soprano 1', 'Soprano 2',
+  'Alto', 'Alto 1', 'Alto 2',
+  'Tenor', 'Tenor 1', 'Tenor 2',
+  'Bass', 'Bass 1', 'Bass 2',
+  'Baritone', 'Mezzo-Soprano', 'Contralto'
 ];
 
 const FVA_TERMS = [
@@ -107,6 +118,9 @@ export default function App() {
   const [startingBudget, setStartingBudget] = useState(0);
   const [newStartingBudget, setNewStartingBudget] = useState('');
 
+  // ENSEMBLE CONFIGURATION
+  const [ensembleRules, setEnsembleRules] = useState(DEFAULT_ENSEMBLE_RULES);
+
   // SHEET MUSIC & UPLOADED TRACKS
   const [musicLibrary, setMusicLibrary] = useState(DEFAULT_MUSIC_LIBRARY);
   const [newSongTitle, setNewSongTitle] = useState('');
@@ -117,11 +131,11 @@ export default function App() {
   const [selectedEnsembleFilter, setSelectedEnsembleFilter] = useState('ALL');
   const [selectedRiserSection, setSelectedRiserSection] = useState('A');
 
-  // SKYWARD CSV IMPORT STATUS
+  // SKYWARD CSV IMPORT & DUES STATE
   const [importStatusMsg, setImportStatusMsg] = useState('');
+  const [payments, setPayments] = useState({});
 
   // FVA TERMS STATE
-  const [fvaCardIndex, setFvaCardIndex] = useState(0);
   const [fvaScore, setFvaScore] = useState(0);
   const [fvaAttempts, setFvaAttempts] = useState(0);
   const [fvaCurrentQuestionIndex, setFvaCurrentQuestionIndex] = useState(0);
@@ -146,7 +160,6 @@ export default function App() {
   // BUDGET FORM STATE
   const [transDate, setTransDate] = useState(new Date().toISOString().split('T')[0]);
   const [transCategory, setTransCategory] = useState('Dues');
-  const [transDesc, setTransDesc] = useState('');
   const [transType, setTransType] = useState('income');
   const [transAmount, setTransAmount] = useState('');
   const [transStudentId, setTransStudentId] = useState('');
@@ -301,7 +314,20 @@ export default function App() {
     }, 1500);
   };
 
-  // HANDLE SKYWARD CSV ROSTER UPLOAD & PARSING
+  // CALCULATE HIGHEST DUE BASED ON STUDENT'S ENSEMBLE ENROLLMENTS
+  const calculateStudentMaxDue = (studentEnsembles) => {
+    if (!studentEnsembles || studentEnsembles.length === 0) return 0;
+    let maxFee = 0;
+    studentEnsembles.forEach(ensId => {
+      const rule = ensembleRules.find(r => r.id === ensId || r.name === ensId);
+      if (rule && rule.fee > maxFee) {
+        maxFee = rule.fee;
+      }
+    });
+    return maxFee;
+  };
+
+  // SKYWARD CSV PARSER
   const handleSkywardCsvUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -313,20 +339,21 @@ export default function App() {
       const newImportedStudents = [];
 
       lines.forEach((line, index) => {
-        if (index === 0 || !line.trim()) return; // Skip CSV headers
+        if (index === 0 || !line.trim()) return;
         const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
 
         if (cols.length >= 2) {
-          const studentId = cols[0] || `SKY-${Math.floor(1000 + Math.random() * 9000)}`;
-          const studentName = cols[1] || 'New Student';
-          const ensemble = cols[2] || 'Symphonic Chorus';
-          const voicePart = cols[3] || 'Soprano';
+          const lastName = cols[0] || 'Student';
+          const firstName = cols[1] || 'New';
+          const grade = cols[2] || '9';
+          const studentId = cols[3] || `SKY-${Math.floor(1000 + Math.random() * 9000)}`;
 
           newImportedStudents.push({
             student_id: studentId,
-            name: studentName,
-            ensemble: ensemble,
-            voice_part: voicePart,
+            name: `${firstName} ${lastName}`,
+            grade: grade,
+            ensembles: ['p2'],
+            voice_part: 'Soprano',
             role: 'student'
           });
         }
@@ -336,17 +363,39 @@ export default function App() {
         setStudents(prev => [...prev, ...newImportedStudents]);
         setImportStatusMsg(`Success! Imported ${newImportedStudents.length} students from Skyward CSV.`);
       } else {
-        setImportStatusMsg('Error parsing Skyward CSV. Ensure columns match: Student ID, Name, Ensemble, Voice Part.');
+        setImportStatusMsg('Error parsing Skyward CSV. Format should be: Last Name, First Name, Grade, ID#');
       }
     };
     reader.readAsText(file);
   };
 
-  // FILE UPLOAD HANDLERS FOR SHEET MUSIC PDF & PRACTICE TRACKS
+  const handleUpdateStudentVoicePart = (studentId, voicePart) => {
+    setStudents(prev => prev.map(s => s.student_id === studentId ? { ...s, voice_part: voicePart } : s));
+  };
+
+  const handleToggleStudentEnsemble = (studentId, ensembleId) => {
+    setStudents(prev => prev.map(s => {
+      if (s.student_id !== studentId) return s;
+      const currentEnsembles = s.ensembles || [];
+      const updatedEnsembles = currentEnsembles.includes(ensembleId)
+        ? currentEnsembles.filter(e => e !== ensembleId)
+        : [...currentEnsembles, ensembleId];
+      return { ...s, ensembles: updatedEnsembles };
+    }));
+  };
+
+  const handleUpdatePaymentStatus = (studentId, isPaid) => {
+    setPayments(prev => ({ ...prev, [studentId]: isPaid }));
+  };
+
+  const handleUpdateEnsembleRule = (id, newName, newFee) => {
+    setEnsembleRules(prev => prev.map(r => r.id === id ? { ...r, name: newName, fee: parseFloat(newFee || 0) } : r));
+  };
+
+  // FILE UPLOAD HANDLERS
   const handlePdfUpload = (folderIdx, songId, e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     const fileUrl = URL.createObjectURL(file);
     setMusicLibrary(prev => {
       const copy = [...prev];
@@ -359,7 +408,6 @@ export default function App() {
   const handleAudioTrackUpload = (folderIdx, songId, partKey, e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     const fileUrl = URL.createObjectURL(file);
     setMusicLibrary(prev => {
       const copy = [...prev];
@@ -397,7 +445,10 @@ export default function App() {
   const fetchStudents = async () => {
     try {
       const res = await fetch(`${API_BASE}/students`);
-      if (res.ok) setStudents(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setStudents(data.map(s => ({ ...s, ensembles: s.ensembles || ['p2'] })));
+      }
     } catch (e) { console.error(e); }
   };
 
@@ -451,7 +502,6 @@ export default function App() {
       if (res.ok) {
         fetchBudget();
         fetchStudents();
-        setTransDesc('');
         setTransAmount('');
         setTransStudentId('');
       }
@@ -524,11 +574,11 @@ export default function App() {
   const totalExpenses = budgetTransactions.filter(t => t.trans_type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const currentBalance = startingBudget + totalIncome - totalExpenses;
 
-  const ensembleList = ['ALL', ...new Set(students.map(s => s.ensemble).filter(Boolean))];
+  const ensembleList = ['ALL', ...ensembleRules.map(r => r.id)];
 
   const filteredStudents = selectedEnsembleFilter === 'ALL'
     ? students.filter(s => s.role !== 'director')
-    : students.filter(s => s.role !== 'director' && s.ensemble === selectedEnsembleFilter);
+    : students.filter(s => s.role !== 'director' && (s.ensembles || []).includes(selectedEnsembleFilter));
 
   if (!currentUser) {
     return (
@@ -612,8 +662,9 @@ export default function App() {
           <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
             {[
               { id: 'welcome', label: '🏠 Welcome Hub' },
+              { id: 'skyward', label: '📋 Skyward Roster & Dues' },
               { id: 'music', label: '🎼 Sheet Music & Part Tracks' },
-              { id: 'risers', label: '🎶 Arc Riser Map & Skyward Roster' },
+              { id: 'risers', label: '🎶 Arc Riser Map' },
               { id: 'fva', label: '📖 FVA Terms' },
               { id: 'eartraining', label: '👂 Ear Training Studio' },
               { id: 'budget', label: '💰 Program Finances & Budget' }
@@ -660,7 +711,137 @@ export default function App() {
             </div>
           )}
 
-          {/* MUSIC LIBRARY & UPLOADER (PDF & AUDIO TRACKS) */}
+          {/* DEDICATED SKYWARD ROSTER & DUES MANAGEMENT */}
+          {directorTab === 'skyward' && (
+            <div className="space-y-6">
+              {/* EDIT ENSEMBLE NAMES & FEES CONTROL PANEL */}
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-md font-bold text-teal-400 uppercase">⚙️ Edit Chorus Ensembles & SchoolCash Dues Rules</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {ensembleRules.map(rule => (
+                    <div key={rule.id} className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
+                      <span className="text-[10px] font-mono text-amber-400 font-bold block">{rule.period}</span>
+                      <input
+                        type="text"
+                        value={rule.name}
+                        onChange={(e) => handleUpdateEnsembleRule(rule.id, e.target.value, rule.fee)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white font-bold"
+                      />
+                      <div className="flex items-center justify-between text-xs pt-1">
+                        <span className="text-slate-400">Fee ($):</span>
+                        <input
+                          type="number"
+                          value={rule.fee}
+                          onChange={(e) => handleUpdateEnsembleRule(rule.id, rule.name, e.target.value)}
+                          className="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-amber-300 font-mono font-bold text-right"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* CSV UPLOAD CARD */}
+              <div className="bg-slate-900 border border-teal-500/40 p-6 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white">📥 Upload Skyward Roster (.CSV)</h3>
+                  <p className="text-xs text-slate-400">CSV Columns: Last Name, First Name, Grade, Student ID#</p>
+                  {importStatusMsg && <p className="text-xs font-bold text-teal-300 pt-1">{importStatusMsg}</p>}
+                </div>
+
+                <label className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-4 py-2.5 rounded cursor-pointer shadow">
+                  📂 Select Skyward CSV File
+                  <input type="file" accept=".csv" onChange={handleSkywardCsvUpload} className="hidden" />
+                </label>
+              </div>
+
+              {/* ROSTER TABLE */}
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-md font-bold text-teal-400">📋 Active Roster, Voice Parts & SchoolCash Status</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 uppercase">
+                        <th className="py-2 px-2">ID#</th>
+                        <th className="py-2 px-2">Student Name</th>
+                        <th className="py-2 px-2">Grade</th>
+                        <th className="py-2 px-2">Voice Part</th>
+                        <th className="py-2 px-2">Ensemble Enrollments</th>
+                        <th className="py-2 px-2 text-right">Highest Due ($)</th>
+                        <th className="py-2 px-2 text-center">SchoolCash Paid</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {students.filter(s => s.role !== 'director').map(student => {
+                        const maxDue = calculateStudentMaxDue(student.ensembles || []);
+                        const isPaid = !!payments[student.student_id];
+
+                        return (
+                          <tr key={student.student_id} className={isPaid ? 'bg-emerald-950/20' : ''}>
+                            <td className="py-2 px-2 font-mono text-slate-400">{student.student_id}</td>
+                            <td className="py-2 px-2 font-bold text-white">{student.name}</td>
+                            <td className="py-2 px-2 text-slate-300">{student.grade || '9'}</td>
+
+                            {/* EDIT VOICE PART */}
+                            <td className="py-2 px-2">
+                              <select
+                                value={student.voice_part || 'Soprano'}
+                                onChange={(e) => handleUpdateStudentVoicePart(student.student_id, e.target.value)}
+                                className="bg-slate-950 border border-slate-700 text-teal-300 font-bold p-1 rounded text-xs"
+                              >
+                                {VOICE_PARTS_LIST.map(part => (
+                                  <option key={part} value={part}>{part}</option>
+                                ))}
+                              </select>
+                            </td>
+
+                            {/* TOGGLE MULTIPLE ENSEMBLES */}
+                            <td className="py-2 px-2">
+                              <div className="flex flex-wrap gap-1 max-w-xs">
+                                {ensembleRules.map(rule => {
+                                  const isSelected = (student.ensembles || []).includes(rule.id);
+                                  return (
+                                    <button
+                                      key={rule.id}
+                                      onClick={() => handleToggleStudentEnsemble(student.student_id, rule.id)}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${
+                                        isSelected ? 'bg-teal-600 text-white border-teal-400' : 'bg-slate-950 text-slate-500 border-slate-800'
+                                      }`}
+                                    >
+                                      {rule.name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </td>
+
+                            {/* HIGHEST DUE */}
+                            <td className="py-2 px-2 font-mono font-bold text-right text-amber-300">${maxDue.toFixed(2)}</td>
+
+                            {/* PAYMENT TOGGLE */}
+                            <td className="py-2 px-2 text-center">
+                              <button
+                                onClick={() => handleUpdatePaymentStatus(student.student_id, !isPaid)}
+                                className={`px-3 py-1 rounded-full text-[10px] font-bold border transition ${
+                                  isPaid
+                                    ? 'bg-emerald-900/80 text-emerald-200 border-emerald-500'
+                                    : 'bg-amber-950 text-amber-300 border-amber-600'
+                                }`}
+                              >
+                                {isPaid ? '✅ Paid (Current)' : '⏳ Pending Payment'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MUSIC LIBRARY & UPLOADER */}
           {directorTab === 'music' && (
             <div className="space-y-6">
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
@@ -737,42 +918,29 @@ export default function App() {
             </div>
           )}
 
-          {/* RISER & SKYWARD ROSTER MANAGER */}
+          {/* RISER MAP MANAGER */}
           {directorTab === 'risers' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-slate-800 pb-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-4">
                 <div>
                   <h3 className="text-lg font-bold text-teal-400">🎶 Stage Arc Risers & Spot Placement</h3>
                   <p className="text-xs text-slate-400">Assign students to physical riser locations by ensemble and voice part.</p>
                 </div>
 
-                {/* SKYWARD CSV ROSTER IMPORT MODULE */}
-                <div className="bg-slate-950 p-4 rounded-xl border border-teal-500/40 space-y-2">
-                  <h4 className="text-xs font-bold text-teal-300 uppercase">📥 Skyward Roster CSV Import</h4>
-                  <p className="text-[11px] text-slate-400">Export roster from Skyward Gradebook as CSV and upload here.</p>
-                  <label className="inline-block bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-3 py-1.5 rounded cursor-pointer shadow">
-                    📂 Upload Skyward Roster (.CSV)
-                    <input type="file" accept=".csv" onChange={handleSkywardCsvUpload} className="hidden" />
-                  </label>
-                  {importStatusMsg && <p className="text-[11px] font-bold text-teal-300 pt-1">{importStatusMsg}</p>}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase">Filter Ensemble:</span>
+                  <select
+                    value={selectedEnsembleFilter}
+                    onChange={(e) => setSelectedEnsembleFilter(e.target.value)}
+                    className="bg-slate-950 border border-slate-700 text-xs text-teal-300 font-bold px-3 py-1.5 rounded"
+                  >
+                    {ensembleList.map(ens => (
+                      <option key={ens} value={ens}>{ens}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {/* ENSEMBLE SELECTOR FILTER */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-400 uppercase">Filter Ensemble:</span>
-                <select
-                  value={selectedEnsembleFilter}
-                  onChange={(e) => setSelectedEnsembleFilter(e.target.value)}
-                  className="bg-slate-950 border border-slate-700 text-xs text-teal-300 font-bold px-3 py-1.5 rounded"
-                >
-                  {ensembleList.map(ens => (
-                    <option key={ens} value={ens}>{ens}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* ARC RISER OVERVIEW */}
               <div className="grid grid-cols-1 md:grid-cols-6 gap-3 pt-2">
                 {RISER_SECTIONS.slice(0, 6).map(sec => (
                   <div key={sec.id} className={`p-3 rounded-xl border ${sec.color} ${sec.rotation} transform transition space-y-2`}>
@@ -789,7 +957,6 @@ export default function App() {
                 ))}
               </div>
 
-              {/* DETAILED SPOT ASSIGNMENT EDITOR */}
               <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-4">
                 <div className="flex justify-between items-center border-b border-slate-800 pb-2">
                   <h4 className="text-xs font-bold text-amber-400 uppercase">
@@ -921,7 +1088,7 @@ export default function App() {
             </div>
           )}
 
-          {/* RESTORED PROGRAM FINANCES & BUDGET MANAGEMENT */}
+          {/* PROGRAM FINANCES & BUDGET MANAGEMENT */}
           {directorTab === 'budget' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1056,7 +1223,7 @@ export default function App() {
               <div className="bg-teal-950/80 border border-teal-500/60 p-6 rounded-xl space-y-1">
                 <span className="text-[10px] uppercase font-bold text-teal-400 block tracking-wider">Your Live Assigned Riser Spot</span>
                 <h2 className="text-xl font-bold text-white">📍 {getAssignedSeatText()}</h2>
-                <p className="text-xs text-slate-300">Ensemble: {currentUser.ensemble} • Voice Part: {currentUser.voice_part}</p>
+                <p className="text-xs text-slate-300">Ensemble: {currentUser.ensemble || 'Symphonic Chorus'} • Voice Part: {currentUser.voice_part || 'Soprano'}</p>
               </div>
 
               <div className="bg-gradient-to-r from-teal-950 to-slate-900 border border-teal-500/50 p-6 rounded-xl text-center space-y-1">
