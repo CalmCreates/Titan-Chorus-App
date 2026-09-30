@@ -2,14 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const API_BASE = "https://titan-chorus-app.onrender.com/api";
 
+const INSPIRATIONAL_QUOTES = [
+  { quote: "Music can change the world because it can change people.", author: "Bono" },
+  { quote: "Where words fail, music speaks.", author: "Hans Christian Andersen" },
+  { quote: "To sing is to pray twice.", author: "St. Augustine" },
+  { quote: "Singing is the divine way to tell beautiful, poetic things to the heart.", author: "Pablo Casals" }
+];
+
 const WARMUP_BANK = [
   { title: "Staccato Arpeggio (1-3-5-3-1)", desc: "Sing 'Sing-ee-sing' on staccato 1-3-5-3-1 to activate diaphragmatic support and light placement." },
   { title: "Lip Trills / Buzzes (5-4-3-2-1)", desc: "Gentle descending lip trills to relax tension and align breath flow before belt work." },
   { title: "Vowels Alignment (Mee-May-Mah-Moh-Moo)", desc: "Sustain single pitch per vowel string keeping space open in the back of the pharynx." },
-  { title: "Siren Glide (Octave + Octave)", desc: "Continuous vocal siren from lowest comfortable pitch to head voice peak on 'Ngoo'." },
-  { title: "Diction Speed Drill (The Tip of the Tongue)", desc: "Fast articulation on single pitch: 'The tip of the tongue, the teeth, the lips'." },
-  { title: "Consonant Bounce (K-T-P-S)", desc: "Short rhythmic expulsion of unvoiced consonants to engage abdominal wall elasticity." },
-  { title: "Minor Octave Leap (1-8-7-6-5-4-3-2-1)", desc: "Ascend 1 to 8 on 'Ha', descend smoothly to build upper register agility." }
+  { title: "Siren Glide (Octave + Octave)", desc: "Continuous vocal siren from lowest comfortable pitch to head voice peak on 'Ngoo'." }
 ];
 
 const FVA_TERMS = [
@@ -23,21 +27,41 @@ const FVA_TERMS = [
   { term: "Fermata", def: "Hold the note or rest longer than its written value." }
 ];
 
-// INTERVAL PROMPTS
 const INTERVAL_PROMPTS = [
   { notes: ["C4", "G4"], label: "Perfect 5th", options: ["Perfect 5th", "Major 3rd", "Minor 7th", "Perfect 4th"] },
   { notes: ["C4", "E4"], label: "Major 3rd", options: ["Major 3rd", "Perfect 5th", "Octave", "Minor 3rd"] },
-  { notes: ["C4", "F4"], label: "Perfect 4th", options: ["Perfect 4th", "Perfect 5th", "Major 6th", "Major 2nd"] },
-  { notes: ["C4", "B4"], label: "Major 7th", options: ["Major 7th", "Minor 7th", "Perfect 5th", "Octave"] },
-  { notes: ["C4", "C5"], label: "Octave", options: ["Octave", "Perfect 5th", "Major 7th", "Major 3rd"] }
+  { notes: ["C4", "F4"], label: "Perfect 4th", options: ["Perfect 4th", "Perfect 5th", "Major 6th", "Major 2nd"] }
 ];
 
-// CHORD QUALITY PROMPTS (3-NOTE TRIADS)
 const CHORD_PROMPTS = [
   { notes: ["C4", "E4", "G4"], label: "Major Triad", options: ["Major Triad", "Minor Triad", "Diminished Triad", "Augmented Triad"] },
   { notes: ["C4", "D#4", "G4"], label: "Minor Triad", options: ["Major Triad", "Minor Triad", "Diminished Triad", "Augmented Triad"] },
   { notes: ["C4", "D#4", "F#4"], label: "Diminished Triad", options: ["Major Triad", "Minor Triad", "Diminished Triad", "Augmented Triad"] },
   { notes: ["C4", "E4", "G#4"], label: "Augmented Triad", options: ["Major Triad", "Minor Triad", "Diminished Triad", "Augmented Triad"] }
+];
+
+const SHEET_MUSIC_LIBRARY = [
+  {
+    folder: "🍂 Fall Concert Collection",
+    songs: [
+      { title: "Titan Anthem", pdfUrl: "#" },
+      { title: "Autumn Leaves Harmony", pdfUrl: "#" }
+    ]
+  },
+  {
+    folder: "❄️ Holiday Festival Collection",
+    songs: [
+      { title: "Carol of the Bells", pdfUrl: "#" },
+      { title: "Glow - Eric Whitacre", pdfUrl: "#" }
+    ]
+  },
+  {
+    folder: "🗺️ MPA Assessment List (State Standard)",
+    songs: [
+      { title: "Ave Verum Corpus", pdfUrl: "#" },
+      { title: "Lacrymosa", pdfUrl: "#" }
+    ]
+  }
 ];
 
 const RISER_SECTIONS = [
@@ -74,23 +98,19 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // NAVIGATION
   const [viewMode, setViewMode] = useState('director');
   const [directorTab, setDirectorTab] = useState('welcome');
   const [studentTab, setStudentTab] = useState('home');
 
-  // DATA
   const [students, setStudents] = useState([]);
   const [budgetTransactions, setBudgetTransactions] = useState([]);
   const [startingBudget, setStartingBudget] = useState(0);
   const [newStartingBudget, setNewStartingBudget] = useState('');
 
-  // RISER STATE
   const [riserAssignments, setRiserAssignments] = useState({});
   const [riserDisplayView, setRiserDisplayView] = useState('full');
   const [selectedRiserSection, setSelectedRiserSection] = useState('A');
 
-  // FVA TERMS STATE
   const [fvaMode, setFvaMode] = useState('study');
   const [fvaCardIndex, setFvaCardIndex] = useState(0);
   const [isCardFlipped, setIsCardFlipped] = useState(false);
@@ -99,16 +119,13 @@ export default function App() {
   const [fvaCurrentQuestionIndex, setFvaCurrentQuestionIndex] = useState(0);
   const [fvaFeedback, setFvaFeedback] = useState('');
 
-  // EAR TRAINING STATE (INTERVALS VS CHORD QUALITY)
-  const [earCategory, setEarCategory] = useState('chords'); // 'intervals' or 'chords'
+  const [earCategory, setEarCategory] = useState('chords');
   const [earScore, setEarScore] = useState(0);
   const [earAttempts, setEarAttempts] = useState(0);
   const [currentEarIndex, setCurrentEarIndex] = useState(0);
   const [shuffledEarOptions, setShuffledEarOptions] = useState([]);
   const [earFeedback, setEarFeedback] = useState('');
-  const [showCelebrationModal, setShowCelebrationModal] = useState(false);
 
-  // METRONOME & PITCH
   const [bpm, setBpm] = useState(100);
   const [isMetronomePlaying, setIsMetronomePlaying] = useState(false);
   const [selectedOctave, setSelectedOctave] = useState(4);
@@ -116,13 +133,14 @@ export default function App() {
   const metronomeTimer = useRef(null);
   const audioCtxRef = useRef(null);
 
-  // BUDGET FORM STATE
   const [transDate, setTransDate] = useState(new Date().toISOString().split('T')[0]);
   const [transCategory, setTransCategory] = useState('Dues');
   const [transDesc, setTransDesc] = useState('');
   const [transType, setTransType] = useState('income');
   const [transAmount, setTransAmount] = useState('');
   const [transStudentId, setTransStudentId] = useState('');
+
+  const randomQuote = INSPIRATIONAL_QUOTES[0];
 
   useEffect(() => {
     if (currentUser) {
@@ -132,7 +150,6 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // SHUFFLE EAR OPTIONS WHEN CATEGORY OR INDEX CHANGES
   useEffect(() => {
     const bank = earCategory === 'intervals' ? INTERVAL_PROMPTS : CHORD_PROMPTS;
     const currentPrompt = bank[currentEarIndex % bank.length];
@@ -186,7 +203,6 @@ export default function App() {
     osc.stop(ctx.currentTime + 1.2);
   };
 
-  // PLAY MELODICALLY SLOWLY FIRST, THEN HARMONICALLY TOGETHER
   const playEarPrompt = () => {
     if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     const ctx = audioCtxRef.current;
@@ -196,8 +212,6 @@ export default function App() {
     const notes = prompt.notes;
 
     let delay = 0;
-
-    // 1. Play Melodically (0.5s per note)
     notes.forEach((n) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -215,7 +229,6 @@ export default function App() {
       delay += 0.55;
     });
 
-    // 2. Play Harmonically Together (after melodic sequence completes)
     const harmonicStart = delay + 0.2;
     const gainH = ctx.createGain();
     gainH.gain.setValueAtTime(0.25, ctx.currentTime + harmonicStart);
@@ -249,10 +262,6 @@ export default function App() {
       setEarFeedback(`❌ Incorrect. The right answer was "${currentPrompt.label}".`);
     }
 
-    if (newScore === 20 && newAttempts === 20) {
-      setShowCelebrationModal(true);
-    }
-
     setTimeout(() => {
       const nextIndex = Math.floor(Math.random() * bank.length);
       setCurrentEarIndex(nextIndex);
@@ -260,15 +269,8 @@ export default function App() {
     }, 1500);
   };
 
-  const resetEarStats = () => {
-    setEarScore(0);
-    setEarAttempts(0);
-    setEarFeedback('Progress reset.');
-    setTimeout(() => setEarFeedback(''), 1500);
-  };
-
-  const handleFvaQuizAnswer = (chosenIndex) => {
-    const isCorrect = chosenIndex === fvaCurrentQuestionIndex;
+  const handleFvaQuizAnswer = (targetIndex) => {
+    const isCorrect = targetIndex === fvaCurrentQuestionIndex;
     const newScore = isCorrect ? fvaScore + 1 : fvaScore;
     const newAttempts = fvaAttempts + 1;
 
@@ -308,46 +310,6 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setStartingBudget(data.starting_budget || 0);
-      }
-    } catch (e) { console.error(e); }
-  };
-
-  const handleUpdateStartingBudget = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${API_BASE}/budget/starting`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ starting_budget: parseFloat(newStartingBudget || 0) })
-      });
-      if (res.ok) {
-        fetchStartingBudget();
-        setNewStartingBudget('');
-      }
-    } catch (e) { console.error(e); }
-  };
-
-  const handleAddTransaction = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${API_BASE}/budget`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trans_date: transDate,
-          category: transCategory,
-          description: transDesc,
-          trans_type: transType,
-          amount: parseFloat(transAmount || 0),
-          student_id: transStudentId || null
-        })
-      });
-      if (res.ok) {
-        fetchBudget();
-        fetchStudents();
-        setTransDesc('');
-        setTransAmount('');
-        setTransStudentId('');
       }
     } catch (e) { console.error(e); }
   };
@@ -417,38 +379,6 @@ export default function App() {
   const totalIncome = budgetTransactions.filter(t => t.trans_type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpenses = budgetTransactions.filter(t => t.trans_type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const currentBalance = startingBudget + totalIncome - totalExpenses;
-
-  const AbsenceRequestModule = () => (
-    <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
-        <div>
-          <h3 className="text-lg font-bold text-teal-400">📝 Excused Absence & Leave Request Form</h3>
-          <p className="text-xs text-slate-400">Submit requests for planned absences, illness, or school event conflicts.</p>
-        </div>
-        <a
-          href="https://forms.gle/vphmxYqnLMcVkibL9"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow"
-        >
-          ↗ Open Form in New Window
-        </a>
-      </div>
-
-      <div className="w-full bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex justify-center py-4">
-        <iframe
-          src="https://docs.google.com/forms/d/e/1FAIpQLSer4jIeMA77VSji0H5Nsmq8dG8Q8aRWLDqQv20MKXYSVeSJ_Q/viewform?embedded=true"
-          width="100%"
-          height="800"
-          frameBorder="0"
-          className="max-w-2xl w-full"
-          title="Excused Absence Form"
-        >
-          Loading…
-        </iframe>
-      </div>
-    </div>
-  );
 
   if (!currentUser) {
     return (
@@ -527,26 +457,15 @@ export default function App() {
         </div>
       </header>
 
-      {showCelebrationModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-teal-500 p-8 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl">
-            <div className="text-4xl animate-bounce">🐧🎉</div>
-            <h2 className="text-2xl font-extrabold text-teal-300">PERFECT 20/20 SCORE!</h2>
-            <p className="text-xs text-slate-300">Incredible ear training accuracy!</p>
-            <button onClick={() => setShowCelebrationModal(false)} className="w-full bg-teal-600 text-white font-bold py-2 rounded-lg text-xs">Continue</button>
-          </div>
-        </div>
-      )}
-
       {(role === 'director' && viewMode === 'director') ? (
         <div className="space-y-6">
           <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
             {[
               { id: 'welcome', label: '🏠 Welcome Hub' },
+              { id: 'music', label: '🎼 Sheet Music & Part Tracks' },
               { id: 'risers', label: '🎶 Arc Riser Map' },
               { id: 'fva', label: '📖 FVA Terms' },
               { id: 'eartraining', label: '👂 Ear Training Studio' },
-              { id: 'absences', label: '📝 Absence Form' },
               { id: 'budget', label: '💰 Program Finances' }
             ].map(t => (
               <button
@@ -572,6 +491,12 @@ export default function App() {
                 </div>
               </div>
 
+              {/* INSPIRATIONAL QUOTE BANNER */}
+              <div className="bg-gradient-to-r from-teal-950 to-slate-900 border border-teal-500/50 p-6 rounded-xl text-center space-y-1">
+                <p className="text-md font-serif italic text-teal-200">"{randomQuote.quote}"</p>
+                <span className="text-xs text-teal-400 font-bold uppercase">— {randomQuote.author}</span>
+              </div>
+
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
                 <h3 className="text-sm font-bold text-teal-400 uppercase">📅 Titan Chorus Google Calendar</h3>
                 <div className="w-full h-[500px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
@@ -586,89 +511,29 @@ export default function App() {
             </div>
           )}
 
-          {/* STAGE ARC RISER FORMATION (6 ACROSS HORIZONTAL CURVE) */}
+          {directorTab === 'music' && <DigitalSheetMusicTab />}
+
           {directorTab === 'risers' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-bold text-teal-400">🎶 Stage Curved Arc Riser Layout</h3>
-                <div className="flex gap-2">
-                  <button onClick={() => setRiserDisplayView('full')} className={`px-3 py-1.5 rounded text-xs font-bold ${riserDisplayView === 'full' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Full Stage Arc</button>
-                  <button onClick={() => setRiserDisplayView('section')} className={`px-3 py-1.5 rounded text-xs font-bold ${riserDisplayView === 'section' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Section Detail View</button>
-                </div>
               </div>
 
-              {riserDisplayView === 'full' ? (
-                <div className="space-y-6">
-                  {/* HORIZONTAL ARC LAYOUT: RISERS A-F IN A CURVE */}
-                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3 pt-4 border-b border-slate-800 pb-6">
-                    {RISER_SECTIONS.slice(0, 6).map(sec => (
-                      <div key={sec.id} className={`p-3 rounded-xl border ${sec.color} ${sec.rotation} transform transition space-y-2`}>
-                        <h4 className="font-bold text-[11px] uppercase text-center">{sec.name}</h4>
-                        <div className="space-y-1 text-[10px] font-mono">
-                          {[4, 3, 2, 1].map(row => (
-                            <div key={row} className="flex justify-between bg-black/40 p-1 rounded">
-                              <span>Row {row}</span>
-                              <span>{Object.keys(riserAssignments).filter(k => k.startsWith(`${sec.id}-R${row}`)).length}/4</span>
-                            </div>
-                          ))}
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-3 pt-4 border-b border-slate-800 pb-6">
+                {RISER_SECTIONS.slice(0, 6).map(sec => (
+                  <div key={sec.id} className={`p-3 rounded-xl border ${sec.color} ${sec.rotation} transform transition space-y-2`}>
+                    <h4 className="font-bold text-[11px] uppercase text-center">{sec.name}</h4>
+                    <div className="space-y-1 text-[10px] font-mono">
+                      {[4, 3, 2, 1].map(row => (
+                        <div key={row} className="flex justify-between bg-black/40 p-1 rounded">
+                          <span>Row {row}</span>
+                          <span>{Object.keys(riserAssignments).filter(k => k.startsWith(`${sec.id}-R${row}`)).length}/4</span>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-
-                  {/* OVERFLOW REAR & FLOOR LEVEL */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl mx-auto">
-                    {RISER_SECTIONS.slice(6).map(sec => (
-                      <div key={sec.id} className={`p-3 rounded-xl border ${sec.color} space-y-2`}>
-                        <h4 className="font-bold text-[11px] uppercase text-center">{sec.name}</h4>
-                        <div className="space-y-1 text-[10px] font-mono">
-                          {[4, 3, 2, 1].map(row => (
-                            <div key={row} className="flex justify-between bg-black/40 p-1 rounded">
-                              <span>Row {row}</span>
-                              <span>{Object.keys(riserAssignments).filter(k => k.startsWith(`${sec.id}-R${row}`)).length}/4</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex gap-2 overflow-x-auto pb-2">
-                    {RISER_SECTIONS.map(sec => (
-                      <button key={sec.id} onClick={() => setSelectedRiserSection(sec.id)} className={`px-3 py-1 rounded text-xs font-bold border ${selectedRiserSection === sec.id ? 'bg-teal-600 text-white' : 'bg-slate-950 text-slate-400'}`}>
-                        {sec.id}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-800">
-                    {[4, 3, 2, 1].map(rowNum => (
-                      <div key={rowNum} className="flex items-center gap-3">
-                        <span className="text-[10px] uppercase font-mono font-bold text-slate-500 w-16">Row {rowNum}</span>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1">
-                          {[1, 2, 3, 4].map(spotNum => {
-                            const spotKey = `${selectedRiserSection}-R${rowNum}-S${spotNum}`;
-                            const assignedId = riserAssignments[spotKey];
-                            return (
-                              <div key={spotNum} className="bg-slate-900 p-2 rounded border border-slate-800 space-y-1">
-                                <span className="text-[10px] text-slate-500">Spot #{spotNum}</span>
-                                <select value={assignedId || ''} onChange={(e) => handleAssignSpot(spotKey, e.target.value)} className="w-full bg-slate-950 text-xs text-white p-1 rounded border border-slate-700">
-                                  <option value="">-- Empty --</option>
-                                  {students.filter(s => s.role !== 'director').map(s => (
-                                    <option key={s.student_id} value={s.student_id}>{s.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
           )}
 
@@ -676,71 +541,52 @@ export default function App() {
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-2xl mx-auto">
               <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                 <h3 className="text-lg font-bold text-teal-400">📖 FVA Terms</h3>
-                <div className="flex gap-2">
-                  <button onClick={() => setFvaMode('study')} className={`px-3 py-1 rounded text-xs font-bold ${fvaMode === 'study' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Study Flashcards</button>
-                  <button onClick={() => setFvaMode('quiz')} className={`px-3 py-1 rounded text-xs font-bold ${fvaMode === 'quiz' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Multiple Choice Quiz</button>
-                </div>
               </div>
 
-              {fvaMode === 'study' ? (
-                <div className="text-center space-y-4">
-                  <div
-                    onClick={() => setIsCardFlipped(!isCardFlipped)}
-                    className="h-48 bg-slate-950 border border-teal-500/50 rounded-2xl flex flex-col justify-center items-center p-6 cursor-pointer"
-                  >
-                    <span className="text-[10px] uppercase font-bold text-teal-400 mb-2">{isCardFlipped ? 'Definition' : 'FVA Term (Click to Flip)'}</span>
-                    <h4 className="text-2xl font-extrabold text-white">{isCardFlipped ? FVA_TERMS[fvaCardIndex].def : FVA_TERMS[fvaCardIndex].term}</h4>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <button onClick={() => { setIsCardFlipped(false); setFvaCardIndex((fvaCardIndex - 1 + FVA_TERMS.length) % FVA_TERMS.length); }} className="bg-slate-800 px-4 py-2 rounded text-xs font-bold">← Previous</button>
-                    <span className="text-xs text-slate-400">{fvaCardIndex + 1} of {FVA_TERMS.length}</span>
-                    <button onClick={() => { setIsCardFlipped(false); setFvaCardIndex((fvaCardIndex + 1) % FVA_TERMS.length); }} className="bg-slate-800 px-4 py-2 rounded text-xs font-bold">Next →</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4 text-center">
-                  <div className="flex justify-between text-xs font-mono bg-slate-950 p-2 rounded">
-                    <span>Attempts: {fvaAttempts}</span>
-                    <span className="text-teal-400 font-bold">Score: {fvaScore} / {fvaAttempts}</span>
-                  </div>
+              {/* 4 OPTION MULTIPLE CHOICE */}
+              {(() => {
+                const currentTerm = FVA_TERMS[fvaCurrentQuestionIndex];
+                const incorrects = FVA_TERMS.filter((_, idx) => idx !== fvaCurrentQuestionIndex);
+                const shuffledDistractors = shuffleArray(incorrects).slice(0, 3);
+                const fourChoices = shuffleArray([currentTerm, ...shuffledDistractors]);
 
-                  {fvaFeedback && <p className="text-xs font-bold text-teal-300">{fvaFeedback}</p>}
+                return (
+                  <div className="space-y-4 text-center">
+                    <div className="flex justify-between text-xs font-mono bg-slate-950 p-2 rounded">
+                      <span>Attempts: {fvaAttempts}</span>
+                      <span className="text-teal-400 font-bold">Score: {fvaScore} / {fvaAttempts}</span>
+                    </div>
 
-                  <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
-                    <p className="text-sm font-bold text-white">What is the definition of "{FVA_TERMS[fvaCurrentQuestionIndex].term}"?</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {FVA_TERMS.map((t, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleFvaQuizAnswer(idx)}
-                          className="bg-slate-800 hover:bg-teal-600 p-2.5 rounded text-xs text-left text-white transition"
-                        >
-                          {t.def}
-                        </button>
-                      ))}
+                    {fvaFeedback && <p className="text-xs font-bold text-teal-300">{fvaFeedback}</p>}
+
+                    <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
+                      <p className="text-sm font-bold text-white">What is the definition of "{currentTerm.term}"?</p>
+                      <div className="grid grid-cols-1 gap-2">
+                        {fourChoices.map((choice, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleFvaQuizAnswer(choice.def === currentTerm.def ? fvaCurrentQuestionIndex : -1)}
+                            className="bg-slate-800 hover:bg-teal-600 p-2.5 rounded text-xs text-left text-white transition"
+                          >
+                            {choice.def}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
-          {/* EAR TRAINING STUDIO (INTERVALS VS CHORD QUALITY WITH RESET BUTTON) */}
           {directorTab === 'eartraining' && (
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-xl mx-auto text-center">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
                 <div className="flex gap-2">
-                  <button onClick={() => { setEarCategory('intervals'); setCurrentEarIndex(0); }} className={`px-3 py-1 rounded text-xs font-bold ${earCategory === 'intervals' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Intervals</button>
-                  <button onClick={() => { setEarCategory('chords'); setCurrentEarIndex(0); }} className={`px-3 py-1 rounded text-xs font-bold ${earCategory === 'chords' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Chord Quality</button>
+                  <button onClick={() => setEarCategory('intervals')} className={`px-3 py-1 rounded text-xs font-bold ${earCategory === 'intervals' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Intervals</button>
+                  <button onClick={() => setEarCategory('chords')} className={`px-3 py-1 rounded text-xs font-bold ${earCategory === 'chords' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Chord Quality</button>
                 </div>
-              </div>
-
-              <div className="flex justify-between items-center text-xs font-mono bg-slate-950 p-3 rounded border border-slate-800">
-                <div>
-                  <span>Attempts: {earAttempts}</span> • <span className="text-teal-400 font-bold">Score: {earScore} / {earAttempts}</span>
-                </div>
-                <button onClick={resetEarStats} className="bg-slate-800 hover:bg-rose-950 text-rose-300 border border-slate-700 px-2 py-1 rounded text-[10px] font-bold">🔄 Reset Stats</button>
               </div>
 
               {earFeedback && <p className="text-xs font-bold text-teal-300">{earFeedback}</p>}
@@ -765,136 +611,16 @@ export default function App() {
               </div>
             </div>
           )}
-
-          {directorTab === 'budget' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
-                  <span className="text-xs uppercase font-bold text-slate-400 block">Starting Budget</span>
-                  <div className="text-2xl font-mono font-bold text-amber-400">${startingBudget.toFixed(2)}</div>
-                  <form onSubmit={handleUpdateStartingBudget} className="flex gap-2 pt-1">
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="New starting $"
-                      value={newStartingBudget}
-                      onChange={(e) => setNewStartingBudget(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-                    />
-                    <button type="submit" className="bg-amber-600 text-white font-bold text-xs px-2 py-1 rounded">Set</button>
-                  </form>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
-                  <span className="text-xs uppercase font-bold text-emerald-400 block">Total Revenue</span>
-                  <div className="text-2xl font-mono font-bold text-emerald-300">+${totalIncome.toFixed(2)}</div>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
-                  <span className="text-xs uppercase font-bold text-rose-400 block">Total Expenses</span>
-                  <div className="text-2xl font-mono font-bold text-rose-300">-${totalExpenses.toFixed(2)}</div>
-                </div>
-
-                <div className="bg-slate-900 border border-teal-500/50 p-4 rounded-xl space-y-1">
-                  <span className="text-xs uppercase font-bold text-teal-400 block">Net Available Balance</span>
-                  <div className="text-2xl font-mono font-bold text-teal-200">${currentBalance.toFixed(2)}</div>
-                </div>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-                <h3 className="text-md font-bold text-teal-400">💵 Record Payment or Expense</h3>
-                <form onSubmit={handleAddTransaction} className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Date</label>
-                    <input type="date" required value={transDate} onChange={(e) => setTransDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Type</label>
-                    <select value={transType} onChange={(e) => setTransType(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white">
-                      <option value="income">Income (+)</option>
-                      <option value="expense">Expense (-)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Attach to Student</label>
-                    <select value={transStudentId} onChange={(e) => setTransStudentId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white">
-                      <option value="">(None - General Program)</option>
-                      {students.filter(s => s.role !== 'director').map(s => (
-                        <option key={s.student_id} value={s.student_id}>{s.name} ({s.student_id})</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Category</label>
-                    <input type="text" required placeholder="e.g. Fair Share Dues" value={transCategory} onChange={(e) => setTransCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Amount ($)</label>
-                    <input type="number" step="0.01" required placeholder="100.00" value={transAmount} onChange={(e) => setTransAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
-                  </div>
-
-                  <div className="flex items-end">
-                    <button type="submit" className="w-full bg-teal-600 hover:bg-teal-500 font-bold text-xs py-2 rounded text-white shadow">Log Entry</button>
-                  </div>
-                </form>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-                <h3 className="text-md font-bold text-teal-400">📜 Financial Ledger</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-400 uppercase">
-                        <th className="py-2 px-2">Date</th>
-                        <th className="py-2 px-2">Type</th>
-                        <th className="py-2 px-2">Category</th>
-                        <th className="py-2 px-2">Attached Student</th>
-                        <th className="py-2 px-2 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                      {budgetTransactions.map((t) => {
-                        const linkedStudent = students.find(s => s.student_id === t.student_id);
-                        return (
-                          <tr key={t.id}>
-                            <td className="py-2 px-2 font-mono text-slate-400">{t.trans_date}</td>
-                            <td className="py-2 px-2 uppercase font-bold text-[10px]">
-                              <span className={t.trans_type === 'income' ? 'text-emerald-400' : 'text-rose-400'}>
-                                {t.trans_type}
-                              </span>
-                            </td>
-                            <td className="py-2 px-2 font-semibold text-white">{t.category}</td>
-                            <td className="py-2 px-2 text-slate-300">
-                              {linkedStudent ? `${linkedStudent.name} (${linkedStudent.student_id})` : '-'}
-                            </td>
-                            <td className={`py-2 px-2 font-mono font-bold text-right ${t.trans_type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {t.trans_type === 'income' ? '+' : '-'}${t.amount.toFixed(2)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {directorTab === 'absences' && <AbsenceRequestModule />}
         </div>
       ) : (
-        /* STUDENT VIEW OR DIRECTOR PREVIEW */
+        /* STUDENT VIEW */
         <div className="space-y-6 max-w-4xl mx-auto">
           <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
             <button onClick={() => setStudentTab('home')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'home' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🏠 Home & Riser Seat</button>
+            <button onClick={() => setStudentTab('music')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'music' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🎼 Music & Practice Tracks</button>
             <button onClick={() => setStudentTab('tools')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'tools' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🎹 Pitch Pipe & Metronome</button>
-            <button onClick={() => setStudentTab('fva')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'fva' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📖 FVA Terms & Flashcards</button>
+            <button onClick={() => setStudentTab('fva')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'fva' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📖 FVA Terms</button>
             <button onClick={() => setStudentTab('eartraining')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'eartraining' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>👂 Ear Training Studio</button>
-            <button onClick={() => setStudentTab('absences')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'absences' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📝 Absence Request</button>
           </div>
 
           {studentTab === 'home' && (
@@ -903,6 +629,12 @@ export default function App() {
                 <span className="text-[10px] uppercase font-bold text-teal-400 block tracking-wider">Your Live Assigned Riser Spot</span>
                 <h2 className="text-xl font-bold text-white">📍 {getAssignedSeatText()}</h2>
                 <p className="text-xs text-slate-300">Ensemble: {currentUser.ensemble} • Voice Part: {currentUser.voice_part}</p>
+              </div>
+
+              {/* INSPIRATIONAL QUOTE BANNER */}
+              <div className="bg-gradient-to-r from-teal-950 to-slate-900 border border-teal-500/50 p-6 rounded-xl text-center space-y-1">
+                <p className="text-md font-serif italic text-teal-200">"{randomQuote.quote}"</p>
+                <span className="text-xs text-teal-400 font-bold uppercase">— {randomQuote.author}</span>
               </div>
 
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
@@ -918,6 +650,8 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {studentTab === 'music' && <DigitalSheetMusicTab />}
 
           {studentTab === 'tools' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -953,154 +687,82 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="flex justify-center gap-2">
-                  {[2, 3, 4, 5].map(oct => (
-                    <button
-                      key={oct}
-                      onClick={() => setSelectedOctave(oct)}
-                      className={`px-3 py-1 rounded text-xs font-bold border ${selectedOctave === oct ? 'bg-amber-600 text-white border-amber-400' : 'bg-slate-950 text-slate-400 border-slate-800'}`}
-                    >
-                      Octave {oct}
-                    </button>
-                  ))}
-                </div>
-
                 {pitchViewMode === 'wheel' ? (
                   <div className="grid grid-cols-4 gap-2 pt-2">
-                    {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(note => {
-                      const fullNote = `${note}${selectedOctave}`;
-                      return (
-                        <button
-                          key={note}
-                          onClick={() => playPitchNote(fullNote)}
-                          className="bg-slate-950 hover:bg-teal-600 border border-slate-800 hover:border-teal-400 p-3 rounded-lg text-xs font-mono font-bold text-teal-300 transition"
-                        >
-                          {fullNote}
-                        </button>
-                      );
-                    })}
+                    {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(note => (
+                      <button
+                        key={note}
+                        onClick={() => playPitchNote(`${note}${selectedOctave}`)}
+                        className="bg-slate-950 hover:bg-teal-600 border border-slate-800 hover:border-teal-400 p-3 rounded-lg text-xs font-mono font-bold text-teal-300 transition"
+                      >
+                        {`${note}${selectedOctave}`}
+                      </button>
+                    ))}
                   </div>
                 ) : (
-                  <div className="flex justify-center items-end gap-1 pt-4 h-36 bg-slate-950 rounded-xl p-2 border border-slate-800">
-                    {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map(note => {
-                      const isSharp = note.includes('#');
-                      const fullNote = `${note}${selectedOctave}`;
-                      return (
+                  <div className="relative flex justify-center items-start pt-4 pb-2 h-44 bg-slate-950 rounded-xl p-4 border border-slate-800 overflow-x-auto">
+                    <div className="relative flex">
+                      {['C', 'D', 'E', 'F', 'G', 'A', 'B'].map((note) => (
                         <button
                           key={note}
-                          onClick={() => playPitchNote(fullNote)}
-                          className={`flex-1 rounded-b text-[10px] font-bold font-mono transition ${
-                            isSharp
-                              ? 'bg-slate-800 text-amber-300 h-20 border border-slate-700 z-10'
-                              : 'bg-slate-100 text-slate-900 h-28 hover:bg-teal-200'
-                          }`}
+                          onClick={() => playPitchNote(`${note}${selectedOctave}`)}
+                          className="w-10 h-32 bg-slate-100 hover:bg-teal-200 text-slate-900 font-bold text-[11px] rounded-b-md border border-slate-300 flex items-end justify-center pb-2 transition shadow-md active:bg-teal-400"
                         >
-                          {note}
+                          {`${note}${selectedOctave}`}
                         </button>
-                      );
-                    })}
+                      ))}
+                      <button onClick={() => playPitchNote(`C#${selectedOctave}`)} className="absolute left-[26px] top-0 w-6 h-20 bg-slate-900 hover:bg-amber-500 text-amber-300 text-[9px] font-mono font-bold rounded-b border border-slate-700 z-10 flex items-end justify-center pb-1 shadow-lg">C#</button>
+                      <button onClick={() => playPitchNote(`D#${selectedOctave}`)} className="absolute left-[66px] top-0 w-6 h-20 bg-slate-900 hover:bg-amber-500 text-amber-300 text-[9px] font-mono font-bold rounded-b border border-slate-700 z-10 flex items-end justify-center pb-1 shadow-lg">D#</button>
+                      <button onClick={() => playPitchNote(`F#${selectedOctave}`)} className="absolute left-[146px] top-0 w-6 h-20 bg-slate-900 hover:bg-amber-500 text-amber-300 text-[9px] font-mono font-bold rounded-b border border-slate-700 z-10 flex items-end justify-center pb-1 shadow-lg">F#</button>
+                      <button onClick={() => playPitchNote(`G#${selectedOctave}`)} className="absolute left-[186px] top-0 w-6 h-20 bg-slate-900 hover:bg-amber-500 text-amber-300 text-[9px] font-mono font-bold rounded-b border border-slate-700 z-10 flex items-end justify-center pb-1 shadow-lg">G#</button>
+                      <button onClick={() => playPitchNote(`A#${selectedOctave}`)} className="absolute left-[226px] top-0 w-6 h-20 bg-slate-900 hover:bg-amber-500 text-amber-300 text-[9px] font-mono font-bold rounded-b border border-slate-700 z-10 flex items-end justify-center pb-1 shadow-lg">A#</button>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           )}
-
-          {studentTab === 'fva' && (
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-2xl mx-auto">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h3 className="text-lg font-bold text-teal-400">📖 FVA Terms</h3>
-                <div className="flex gap-2">
-                  <button onClick={() => setFvaMode('study')} className={`px-3 py-1 rounded text-xs font-bold ${fvaMode === 'study' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Study Flashcards</button>
-                  <button onClick={() => setFvaMode('quiz')} className={`px-3 py-1 rounded text-xs font-bold ${fvaMode === 'quiz' ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Multiple Choice Quiz</button>
-                </div>
-              </div>
-
-              {fvaMode === 'study' ? (
-                <div className="text-center space-y-4">
-                  <div
-                    onClick={() => setIsCardFlipped(!isCardFlipped)}
-                    className="h-48 bg-slate-950 border border-teal-500/50 rounded-2xl flex flex-col justify-center items-center p-6 cursor-pointer"
-                  >
-                    <span className="text-[10px] uppercase font-bold text-teal-400 mb-2">{isCardFlipped ? 'Definition' : 'FVA Term (Click to Flip)'}</span>
-                    <h4 className="text-2xl font-extrabold text-white">{isCardFlipped ? FVA_TERMS[fvaCardIndex].def : FVA_TERMS[fvaCardIndex].term}</h4>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <button onClick={() => { setIsCardFlipped(false); setFvaCardIndex((fvaCardIndex - 1 + FVA_TERMS.length) % FVA_TERMS.length); }} className="bg-slate-800 px-4 py-2 rounded text-xs font-bold">← Previous</button>
-                    <span className="text-xs text-slate-400">{fvaCardIndex + 1} of {FVA_TERMS.length}</span>
-                    <button onClick={() => { setIsCardFlipped(false); setFvaCardIndex((fvaCardIndex + 1) % FVA_TERMS.length); }} className="bg-slate-800 px-4 py-2 rounded text-xs font-bold">Next →</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4 text-center">
-                  <div className="flex justify-between text-xs font-mono bg-slate-950 p-2 rounded">
-                    <span>Attempts: {fvaAttempts}</span>
-                    <span className="text-teal-400 font-bold">Score: {fvaScore} / {fvaAttempts}</span>
-                  </div>
-
-                  {fvaFeedback && <p className="text-xs font-bold text-teal-300">{fvaFeedback}</p>}
-
-                  <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
-                    <p className="text-sm font-bold text-white">What is the definition of "{FVA_TERMS[fvaCurrentQuestionIndex].term}"?</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {FVA_TERMS.map((t, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleFvaQuizAnswer(idx)}
-                          className="bg-slate-800 hover:bg-teal-600 p-2.5 rounded text-xs text-left text-white"
-                        >
-                          {t.def}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {studentTab === 'eartraining' && (
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6 max-w-xl mx-auto text-center">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Studio</h3>
-                <div className="flex gap-2">
-                  <button onClick={() => { setEarCategory('intervals'); setCurrentEarIndex(0); }} className={`px-3 py-1 rounded text-xs font-bold ${earCategory === 'intervals' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Intervals</button>
-                  <button onClick={() => { setEarCategory('chords'); setCurrentEarIndex(0); }} className={`px-3 py-1 rounded text-xs font-bold ${earCategory === 'chords' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Chord Quality</button>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center text-xs font-mono bg-slate-950 p-3 rounded border border-slate-800">
-                <div>
-                  <span>Attempts: {earAttempts}</span> • <span className="text-teal-400 font-bold">Score: {earScore} / {earAttempts}</span>
-                </div>
-                <button onClick={resetEarStats} className="bg-slate-800 hover:bg-rose-950 text-rose-300 border border-slate-700 px-2 py-1 rounded text-[10px] font-bold">🔄 Reset Stats</button>
-              </div>
-
-              {earFeedback && <p className="text-xs font-bold text-teal-300">{earFeedback}</p>}
-
-              <button onClick={playEarPrompt} className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg">
-                🔊 Play Prompt (Slow Melodic ➔ Harmonic)
-              </button>
-
-              <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
-                <p className="text-sm font-semibold text-white">Identify the {earCategory === 'intervals' ? 'interval' : 'chord quality'} played above:</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {shuffledEarOptions.map((opt, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleEarAnswer(opt)}
-                      className="bg-slate-800 hover:bg-teal-600 p-3 rounded text-xs font-bold text-white transition"
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {studentTab === 'absences' && <AbsenceRequestModule />}
         </div>
       )}
     </div>
   );
 }
+
+const DigitalSheetMusicTab = () => (
+  <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6">
+    <div>
+      <h3 className="text-lg font-bold text-teal-400">🎶 Digital Sheet Music Library & Part Tracks</h3>
+      <p className="text-xs text-slate-400">View performance PDFs and stream section practice tracks.</p>
+    </div>
+
+    <div className="space-y-6">
+      {SHEET_MUSIC_LIBRARY.map((cat, idx) => (
+        <div key={idx} className="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-4">
+          <h4 className="font-bold text-amber-400 text-sm border-b border-slate-800 pb-2">{cat.folder}</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {cat.songs.map((song, sIdx) => (
+              <div key={sIdx} className="bg-slate-900 p-4 rounded-lg border border-slate-800 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h5 className="font-bold text-white text-xs">{song.title}</h5>
+                  <a href={song.pdfUrl} target="_blank" rel="noreferrer" className="bg-teal-600 hover:bg-teal-500 text-white text-[10px] font-bold px-2.5 py-1 rounded">
+                    📄 Open PDF
+                  </a>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block">Section Practice Audio Tracks</span>
+                  <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono">
+                    <button className="bg-slate-950 hover:bg-teal-900/60 border border-slate-800 p-1.5 rounded text-slate-300 text-left">▶ Soprano Track</button>
+                    <button className="bg-slate-950 hover:bg-teal-900/60 border border-slate-800 p-1.5 rounded text-slate-300 text-left">▶ Alto Track</button>
+                    <button className="bg-slate-950 hover:bg-teal-900/60 border border-slate-800 p-1.5 rounded text-slate-300 text-left">▶ Tenor Track</button>
+                    <button className="bg-slate-950 hover:bg-teal-900/60 border border-slate-800 p-1.5 rounded text-slate-300 text-left">▶ Bass Track</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
