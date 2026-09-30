@@ -327,7 +327,7 @@ export default function App() {
     return maxFee;
   };
 
-  // SKYWARD CSV PARSER
+// SKYWARD CSV PARSER (Handles Skyward Report Headers & Dynamic Column Mapping)
   const handleSkywardCsvUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -338,21 +338,32 @@ export default function App() {
       const lines = text.split('\n');
       const newImportedStudents = [];
 
-      lines.forEach((line, index) => {
-        if (index === 0 || !line.trim()) return;
+      lines.forEach((line) => {
+        if (!line.trim()) return;
+
+        // Clean quotes and split CSV columns
         const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
 
-        if (cols.length >= 2) {
-          const lastName = cols[0] || 'Student';
-          const firstName = cols[1] || 'New';
-          const grade = cols[2] || '9';
-          const studentId = cols[3] || `SKY-${Math.floor(1000 + Math.random() * 9000)}`;
+        // Check if row has a valid 10-digit Skyward Student ID (starts with 480 or numbers)
+        const possibleId = cols.find(c => /^\d{9,10}$/.test(c));
+        const possibleName = cols[0]; // "Last, First MI" is in Column 0
+
+        // Skip Skyward header/report lines (lines that don't contain a real Student ID)
+        if (possibleId && possibleName && !possibleName.toLowerCase().includes('last')) {
+          // Format "Last, First MI" -> "First Last"
+          let formattedName = possibleName;
+          if (possibleName.includes(',')) {
+            const parts = possibleName.split(',').map(p => p.trim());
+            formattedName = `${parts[1] || ''} ${parts[0] || ''}`.trim();
+          }
+
+          const grade = cols[2] && !isNaN(cols[2]) ? cols[2] : '09';
 
           newImportedStudents.push({
-            student_id: studentId,
-            name: `${firstName} ${lastName}`,
+            student_id: possibleId,
+            name: formattedName,
             grade: grade,
-            ensembles: ['p2'],
+            ensembles: ['p2'], // Default to 2nd Period or adjust as needed
             voice_part: 'Soprano',
             role: 'student'
           });
@@ -360,10 +371,15 @@ export default function App() {
       });
 
       if (newImportedStudents.length > 0) {
-        setStudents(prev => [...prev, ...newImportedStudents]);
-        setImportStatusMsg(`Success! Imported ${newImportedStudents.length} students from Skyward CSV.`);
+        setStudents(prev => {
+          // Merge avoiding duplicate student IDs
+          const existingIds = new Set(prev.map(s => s.student_id));
+          const filteredNew = newImportedStudents.filter(s => !existingIds.has(s.student_id));
+          return [...prev, ...filteredNew];
+        });
+        setImportStatusMsg(`✅ Success! Imported ${newImportedStudents.length} students from Skyward.`);
       } else {
-        setImportStatusMsg('Error parsing Skyward CSV. Format should be: Last Name, First Name, Grade, ID#');
+        setImportStatusMsg('❌ Could not locate student records in this file. Please verify the CSV.');
       }
     };
     reader.readAsText(file);
