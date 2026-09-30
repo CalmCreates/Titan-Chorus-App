@@ -12,12 +12,38 @@ const WARMUP_BANK = [
   { title: "Minor Octave Leap (1-8-7-6-5-4-3-2-1)", desc: "Ascend 1 to 8 on 'Ha', descend smoothly to build upper register agility." }
 ];
 
+const FVA_TERMS = [
+  { term: "A Cappella", def: "Singing without instrumental accompaniment." },
+  { term: "Andante", def: "At a walking pace; moderately slow tempo." },
+  { term: "Subito", def: "Suddenly (e.g., subito piano - suddenly soft)." },
+  { term: "Staccato", def: "Short, detached, separated articulation." },
+  { term: "Legato", def: "Smooth and connected notes." },
+  { term: "Crescendo", def: "Gradually growing louder." },
+  { term: "Diminuendo / Decrescendo", def: "Gradually getting softer." },
+  { term: "Fermata", def: "Hold the note or rest longer than its written value." }
+];
+
+// RISER CONFIGURATION: Risers A through F (4 rows each), Overflow Riser G, and Floor Spots
+const RISER_SECTIONS = [
+  { id: 'A', name: 'Riser A (Far Left)', rows: [4, 3, 2, 1] },
+  { id: 'B', name: 'Riser B (Left Center)', rows: [4, 3, 2, 1] },
+  { id: 'C', name: 'Riser C (Center Left)', rows: [4, 3, 2, 1] },
+  { id: 'D', name: 'Riser D (Center Right)', rows: [4, 3, 2, 1] },
+  { id: 'E', name: 'Riser E (Right Center)', rows: [4, 3, 2, 1] },
+  { id: 'F', name: 'Riser F (Far Right)', rows: [4, 3, 2, 1] },
+  { id: 'G', name: 'Riser G (Overflow)', rows: [4, 3, 2, 1] },
+  { id: 'FLOOR', name: 'Floor Level (In Front of Risers)', rows: [1] }
+];
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // DIRECTOR / STUDENT MODE TOGGLE
+  const [viewMode, setViewMode] = useState('director'); // 'director' or 'student'
 
   // PASSWORD CHANGE MODAL
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -36,6 +62,15 @@ export default function App() {
   const [budgetTransactions, setBudgetTransactions] = useState([]);
   const [startingBudget, setStartingBudget] = useState(0);
   const [newStartingBudget, setNewStartingBudget] = useState('');
+
+  // RISER STATE (Key: "SECTION-ROW-SPOT", Value: student_id)
+  const [riserAssignments, setRiserAssignments] = useState({});
+  const [selectedRiserSection, setSelectedRiserSection] = useState('A');
+
+  // EAR TRAINING QUIZ STATE
+  const [quizScore, setQuizScore] = useState(0);
+  const [quizQuestionCount, setQuizQuestionCount] = useState(1);
+  const [showCelebrationModal, setShowCelebrationModal] = useState(false);
 
   // NEW TRANSACTION FORM STATE
   const [transDate, setTransDate] = useState(new Date().toISOString().split('T')[0]);
@@ -142,6 +177,7 @@ export default function App() {
 
       if (data.success) {
         setCurrentUser(data);
+        setViewMode(data.role === 'director' ? 'director' : 'student');
         setPassword('');
       } else {
         setErrorMsg(data.message || 'Invalid Student ID or Password.');
@@ -189,6 +225,63 @@ export default function App() {
     } catch (e) { console.error(e); }
   };
 
+  // RISER SPOT ASSIGNMENT HANDLER
+  const handleAssignSpot = (spotKey, studentId) => {
+    setRiserAssignments(prev => {
+      const updated = { ...prev };
+      if (!studentId) {
+        delete updated[spotKey];
+      } else {
+        // Remove student from any other assigned spot first
+        Object.keys(updated).forEach(k => {
+          if (updated[k] === studentId) delete updated[k];
+        });
+        updated[spotKey] = studentId;
+      }
+      return updated;
+    });
+  };
+
+  // AUTO-ASSIGN ALL UNASSIGNED STUDENTS
+  const handleAutoAssignRiser = () => {
+    const unassigned = students.filter(s => s.role !== 'director' && !Object.values(riserAssignments).includes(s.student_id));
+    const newAssignments = { ...riserAssignments };
+
+    let studentIndex = 0;
+    ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'FLOOR'].forEach(secId => {
+      [4, 3, 2, 1].forEach(rowNum => {
+        for (let spot = 1; spot <= 4; spot++) {
+          if (studentIndex >= unassigned.length) return;
+          const key = `${secId}-R${rowNum}-S${spot}`;
+          if (!newAssignments[key]) {
+            newAssignments[key] = unassigned[studentIndex].student_id;
+            studentIndex++;
+          }
+        }
+      });
+    });
+
+    setRiserAssignments(newAssignments);
+  };
+
+  // EAR TRAINING ANSWER HANDLER
+  const handleQuizAnswer = (isCorrect) => {
+    const newScore = isCorrect ? quizScore + 1 : quizScore;
+    setQuizScore(newScore);
+
+    if (quizQuestionCount >= 20) {
+      if (newScore === 20) {
+        setShowCelebrationModal(true);
+      } else {
+        alert(`Quiz Finished! Final Score: ${newScore}/20`);
+      }
+      setQuizQuestionCount(1);
+      setQuizScore(0);
+    } else {
+      setQuizQuestionCount(prev => prev + 1);
+    }
+  };
+
   const getDailyWarmups = () => {
     const today = new Date();
     const dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
@@ -207,7 +300,7 @@ export default function App() {
   const totalExpenses = budgetTransactions.filter(t => t.trans_type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const currentBalance = startingBudget + totalIncome - totalExpenses;
 
-  // REUSABLE ABSENCE REQUEST COMPONENT
+  // ABSENCE REQUEST MODULE
   const AbsenceRequestModule = () => (
     <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
@@ -231,8 +324,6 @@ export default function App() {
           width="100%"
           height="800"
           frameBorder="0"
-          marginHeight="0"
-          marginWidth="0"
           className="max-w-2xl w-full"
           title="Excused Absence Form"
         >
@@ -307,7 +398,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
-      {/* HEADER */}
+      {/* HEADER WITH DIRECTOR / STUDENT MODE TOGGLE */}
       <header className="flex justify-between items-center border-b border-teal-900/60 pb-4 mb-6">
         <div className="flex items-center space-x-3">
           <img
@@ -322,41 +413,56 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex space-x-2">
+        <div className="flex items-center space-x-3">
+          {/* DIRECTOR vs STUDENT MODE TOGGLE BUTTON */}
+          {role === 'director' && (
+            <button
+              onClick={() => setViewMode(viewMode === 'director' ? 'student' : 'director')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition flex items-center gap-1.5 ${
+                viewMode === 'director' ? 'bg-amber-600 text-white border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700'
+              }`}
+            >
+              🔄 Mode: {viewMode === 'director' ? '👑 Director' : '🎓 Student Preview'}
+            </button>
+          )}
+
           <button onClick={() => setShowPasswordModal(true)} className="bg-slate-800 border border-slate-700 text-xs text-slate-200 px-3 py-2 rounded-lg">🔑 Password</button>
           <button onClick={() => setCurrentUser(null)} className="bg-rose-950 border border-rose-800 text-xs text-rose-200 px-3 py-2 rounded-lg">Sign Out</button>
         </div>
       </header>
 
-      {/* PASSWORD MODAL */}
-      {showPasswordModal && (
+      {/* CELEBRATION MODAL (BLUE PENGUIN + CONFETTI) */}
+      {showCelebrationModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-700 p-6 rounded-xl max-w-sm w-full space-y-4">
-            <h3 className="text-md font-bold text-teal-400">Change Password</h3>
-            <form onSubmit={handleChangePassword} className="space-y-3">
-              <input type="password" required placeholder="Current Password" value={oldPass} onChange={(e) => setOldPass(e.target.value)} className="w-full bg-slate-800 border border-slate-700 p-2 rounded text-xs text-white" />
-              <input type="password" required placeholder="New Password" value={newPass} onChange={(e) => setNewPass(e.target.value)} className="w-full bg-slate-800 border border-slate-700 p-2 rounded text-xs text-white" />
-              {passUpdateMsg && <p className="text-xs text-center font-bold">{passUpdateMsg}</p>}
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowPasswordModal(false)} className="bg-slate-800 text-xs px-3 py-1.5 rounded">Close</button>
-                <button type="submit" className="bg-teal-600 text-xs font-bold px-4 py-1.5 rounded text-white">Save</button>
-              </div>
-            </form>
+          <div className="bg-slate-900 border border-teal-500 p-8 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <div className="text-4xl animate-bounce">🐧🎉</div>
+            <h2 className="text-2xl font-extrabold text-teal-300">PERFECT 20/20 SCORE!</h2>
+            <p className="text-xs text-slate-300">Incredible ear training accuracy! You mastered every interval and chord quality!</p>
+            <div className="bg-teal-950 border border-teal-800 p-3 rounded-xl text-teal-300 font-bold text-xs">
+              🌟 Blue Penguin Chorus Mascot Celebrates You! 🌟
+            </div>
+            <button
+              onClick={() => setShowCelebrationModal(false)}
+              className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 rounded-lg text-xs"
+            >
+              Continue Practice
+            </button>
           </div>
         </div>
       )}
 
       {/* DIRECTOR VIEW */}
-      {role === 'director' && (
+      {role === 'director' && viewMode === 'director' && (
         <div>
           <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3 mb-6">
             {[
               { id: 'welcome', label: '🏠 Welcome Hub' },
+              { id: 'risers', label: '🎶 Riser Charts (A-F, G & Floor)' },
+              { id: 'fva', label: '📖 FVA Terms' },
+              { id: 'eartraining', label: '👂 Ear Training' },
               { id: 'absences', label: '📝 Absence Requests' },
               { id: 'budget', label: '💰 Program Finances' },
-              { id: 'roster', label: '📋 Roster & Roles' },
-              { id: 'attendance', label: '📍 GPS Attendance' },
-              { id: 'risers', label: '🎶 Riser Charts' }
+              { id: 'roster', label: '📋 Roster & Roles' }
             ].map((t) => (
               <button
                 key={t.id}
@@ -406,6 +512,120 @@ export default function App() {
                     scrolling="no"
                     title="Titan Chorus Calendar"
                   />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* INTERACTIVE CHORAL RISERS TAB (A-F, G & FLOOR) */}
+          {directorTab === 'risers' && (
+            <div className="space-y-6">
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-teal-400">🎶 Interactive Riser Chart Layout</h3>
+                    <p className="text-xs text-slate-400">Organize rosters across Risers A–F, Overflow Riser G, and Floor Spots.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={handleAutoAssignRiser} className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-3 py-2 rounded-lg">⚡ Auto-Fill Unassigned</button>
+                    <button onClick={() => setRiserAssignments({})} className="bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold text-xs px-3 py-2 rounded-lg">Reset Layout</button>
+                  </div>
+                </div>
+
+                {/* RISER SECTION SELECTOR TABS */}
+                <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+                  {RISER_SECTIONS.map(sec => (
+                    <button
+                      key={sec.id}
+                      onClick={() => setSelectedRiserSection(sec.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                        selectedRiserSection === sec.id ? 'bg-amber-600 text-white border-amber-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+                      }`}
+                    >
+                      {sec.name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* SELECTED RISER SECTION GRID */}
+                <div className="bg-slate-950 p-6 rounded-xl border border-slate-800 space-y-4">
+                  <h4 className="text-xs font-bold text-amber-400 uppercase">
+                    Currently Viewing: {RISER_SECTIONS.find(s => s.id === selectedRiserSection)?.name}
+                  </h4>
+
+                  <div className="space-y-3">
+                    {[4, 3, 2, 1].map(rowNum => {
+                      if (selectedRiserSection === 'FLOOR' && rowNum > 1) return null;
+                      return (
+                        <div key={rowNum} className="flex items-center gap-3">
+                          <span className="text-[10px] uppercase font-mono font-bold text-slate-500 w-16">
+                            {selectedRiserSection === 'FLOOR' ? 'FLOOR' : `ROW ${rowNum}`}
+                          </span>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1">
+                            {[1, 2, 3, 4].map(spotNum => {
+                              const spotKey = `${selectedRiserSection}-R${rowNum}-S${spotNum}`;
+                              const assignedStudentId = riserAssignments[spotKey];
+                              const assignedStudent = students.find(s => s.student_id === assignedStudentId);
+
+                              return (
+                                <div key={spotNum} className="bg-slate-900 border border-slate-800 p-2 rounded-lg space-y-1">
+                                  <div className="flex justify-between items-center text-[10px] font-mono text-slate-500">
+                                    <span>Spot #{spotNum}</span>
+                                    {assignedStudent && <span className="text-teal-400 font-bold">{assignedStudent.voice_part}</span>}
+                                  </div>
+                                  <select
+                                    value={assignedStudentId || ''}
+                                    onChange={(e) => handleAssignSpot(spotKey, e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-700 text-xs text-white p-1 rounded"
+                                  >
+                                    <option value="">-- Empty Spot --</option>
+                                    {students.filter(s => s.role !== 'director').map(s => (
+                                      <option key={s.student_id} value={s.student_id}>{s.name} ({s.student_id})</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* FVA STUDY TERMS TAB */}
+          {directorTab === 'fva' && (
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+              <h3 className="text-lg font-bold text-teal-400">📖 Florida Vocal Association (FVA) Study Glossary</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {FVA_TERMS.map((item, idx) => (
+                  <div key={idx} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+                    <span className="font-bold text-teal-300 text-sm">{item.term}</span>
+                    <p className="text-xs text-slate-300">{item.def}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* EAR TRAINING QUIZ TAB */}
+          {directorTab === 'eartraining' && (
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4 max-w-xl mx-auto text-center">
+              <h3 className="text-lg font-bold text-teal-400">👂 Ear Training: Intervals & Chord Quality</h3>
+              <div className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs font-mono">
+                <span>Question: {quizQuestionCount} / 20</span>
+                <span className="text-teal-400 font-bold">Current Score: {quizScore}</span>
+              </div>
+              <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
+                <p className="text-sm font-semibold text-white">Identify the played interval/chord quality:</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => handleQuizAnswer(true)} className="bg-slate-800 hover:bg-teal-600 border border-slate-700 p-3 rounded-lg text-xs font-bold text-white transition">Major 3rd</button>
+                  <button onClick={() => handleQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 border border-slate-700 p-3 rounded-lg text-xs font-bold text-white transition">Perfect 5th</button>
+                  <button onClick={() => handleQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 border border-slate-700 p-3 rounded-lg text-xs font-bold text-white transition">Minor 7th</button>
+                  <button onClick={() => handleQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 border border-slate-700 p-3 rounded-lg text-xs font-bold text-white transition">Diminished Triad</button>
                 </div>
               </div>
             </div>
@@ -572,68 +792,17 @@ export default function App() {
               </div>
             </div>
           )}
-
-          {directorTab === 'attendance' && (
-            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-4">
-              <h3 className="text-lg font-bold text-teal-400">📍 Active GPS Event Geofences</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {eventsList.map((e) => (
-                  <div key={e.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-                    <h4 className="font-bold text-white">{e.title}</h4>
-                    <p className="text-xs text-teal-300">{e.location_name} • {e.event_date}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {directorTab === 'risers' && (
-            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 text-center">
-              <h3 className="text-lg font-bold text-teal-400 mb-2">🎶 Interactive Choral Riser Layout</h3>
-              <p className="text-xs text-slate-400">Riser Map active for all ensembles.</p>
-            </div>
-          )}
         </div>
       )}
 
-      {/* CLC VIEW */}
-      {role === 'clc' && (
-        <div className="space-y-6">
-          <div className="bg-amber-950/40 border border-amber-500/50 p-4 rounded-xl">
-            <h2 className="text-lg font-bold text-amber-300">⭐ Choir Leadership Council (CLC) Hub</h2>
-            <p className="text-xs text-amber-200/80">Authorized attendance check-in, leave form, & riser monitoring access.</p>
-          </div>
-
-          <div className="flex gap-2 border-b border-slate-800 pb-3">
-            <button onClick={() => setClcTab('attendance')} className={`px-4 py-2 rounded-lg text-xs font-bold ${clcTab === 'attendance' ? 'bg-amber-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📍 GPS Attendance Check</button>
-            <button onClick={() => setClcTab('absences')} className={`px-4 py-2 rounded-lg text-xs font-bold ${clcTab === 'absences' ? 'bg-amber-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📝 Absence Form</button>
-            <button onClick={() => setClcTab('risers')} className={`px-4 py-2 rounded-lg text-xs font-bold ${clcTab === 'risers' ? 'bg-amber-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🎶 Riser Maps</button>
-          </div>
-
-          {clcTab === 'attendance' && (
-            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
-              <h3 className="text-sm font-bold text-amber-400 mb-3">Live Geofence Check-in Status</h3>
-              <p className="text-xs text-slate-400">View real-time student check-in markers for upcoming performances.</p>
-            </div>
-          )}
-
-          {clcTab === 'absences' && <AbsenceRequestModule />}
-
-          {clcTab === 'risers' && (
-            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
-              <h3 className="text-sm font-bold text-amber-400 mb-3">Choral Riser Map</h3>
-              <p className="text-xs text-slate-400">Verify row positions and voice placements for rehearsals.</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* REGULAR STUDENT VIEW */}
-      {role === 'student' && (
+      {/* REGULAR STUDENT VIEW OR DIRECTOR STUDENT PREVIEW MODE */}
+      {(role === 'student' || (role === 'director' && viewMode === 'student')) && (
         <div className="space-y-6 max-w-4xl mx-auto">
           <div className="flex gap-2 border-b border-slate-800 pb-3">
             <button onClick={() => setStudentTab('home')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'home' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🏠 Student Portal</button>
-            <button onClick={() => setStudentTab('absences')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'absences' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📝 Submit Absence Request</button>
+            <button onClick={() => setStudentTab('fva')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'fva' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📖 FVA Study Terms</button>
+            <button onClick={() => setStudentTab('eartraining')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'eartraining' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>👂 Ear Training</button>
+            <button onClick={() => setStudentTab('absences')} className={`px-4 py-2 rounded-lg text-xs font-bold ${studentTab === 'absences' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📝 Absence Form</button>
           </div>
 
           {studentTab === 'home' && (
@@ -643,22 +812,40 @@ export default function App() {
             </div>
           )}
 
+          {studentTab === 'fva' && (
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+              <h3 className="text-lg font-bold text-teal-400">📖 FVA Study Glossary</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {FVA_TERMS.map((item, idx) => (
+                  <div key={idx} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+                    <span className="font-bold text-teal-300 text-sm">{item.term}</span>
+                    <p className="text-xs text-slate-300">{item.def}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {studentTab === 'eartraining' && (
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4 max-w-xl mx-auto text-center">
+              <h3 className="text-lg font-bold text-teal-400">👂 Ear Training Practice</h3>
+              <div className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs font-mono">
+                <span>Question: {quizQuestionCount} / 20</span>
+                <span className="text-teal-400 font-bold">Current Score: {quizScore}</span>
+              </div>
+              <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
+                <p className="text-sm font-semibold text-white">Identify the interval/chord quality:</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => handleQuizAnswer(true)} className="bg-slate-800 hover:bg-teal-600 border border-slate-700 p-3 rounded-lg text-xs font-bold text-white transition">Major 3rd</button>
+                  <button onClick={() => handleQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 border border-slate-700 p-3 rounded-lg text-xs font-bold text-white transition">Perfect 5th</button>
+                  <button onClick={() => handleQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 border border-slate-700 p-3 rounded-lg text-xs font-bold text-white transition">Minor 7th</button>
+                  <button onClick={() => handleQuizAnswer(false)} className="bg-slate-800 hover:bg-teal-600 border border-slate-700 p-3 rounded-lg text-xs font-bold text-white transition">Diminished Triad</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {studentTab === 'absences' && <AbsenceRequestModule />}
-        </div>
-      )}
-
-      {/* ALUMNI VIEW */}
-      {role === 'alumni' && (
-        <div className="space-y-6 max-w-3xl mx-auto">
-          <div className="bg-indigo-950/60 border border-indigo-500/50 p-6 rounded-xl text-center space-y-2">
-            <h2 className="text-2xl font-extrabold text-indigo-300">🎓 Titan Chorus Alumni Portal</h2>
-            <p className="text-xs text-slate-300">Once a Titan, always a Titan. Stay connected with the program!</p>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-            <h3 className="text-sm font-bold text-indigo-400 uppercase">💌 Send Thanks & Encouragement to Director Lengua-Miranda</h3>
-            <a href="mailto:Cesar.Lengua@ocps.net?subject=Olympia%20Titan%20Chorus%20Alumni%20Note" className="inline-block bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2.5 rounded-lg text-xs">✉️ Write Thank You Email</a>
-          </div>
         </div>
       )}
     </div>
