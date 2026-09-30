@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const API_BASE = "https://titan-chorus-app.onrender.com/api";
 
-const DAILY_QUOTES = [
-  "Music can change the world because it can change people. — Bono",
-  "Where words fail, music speaks. — Hans Christian Andersen",
-  "Excellence is not an act, but a habit. Practice with purpose! — Aristotle",
-  "Choral singing is a model for human harmony. — Eric Whitacre",
-  "We strive to touch lives through the power of song!"
+const WARMUP_BANK = [
+  { title: "Staccato Arpeggio (1-3-5-3-1)", desc: "Sing 'Sing-ee-sing' on staccato 1-3-5-3-1 to activate diaphragmatic support and light placement." },
+  { title: "Lip Trills / Buzzes (5-4-3-2-1)", desc: "Gentle descending lip trills to relax tension and align breath flow before belt work." },
+  { title: "Vowels Alignment (Mee-May-Mah-Moh-Moo)", desc: "Sustain single pitch per vowel string keeping space open in the back of the pharynx." },
+  { title: "Siren Glide (Octave + Octave)", desc: "Continuous vocal siren from lowest comfortable pitch to head voice peak on 'Ngoo'." },
+  { title: "Diction Speed Drill (The Tip of the Tongue)", desc: "Fast articulation on single pitch: 'The tip of the tongue, the teeth, the lips'." },
+  { title: "Consonant Bounce (K-T-P-S)", desc: "Short rhythmic expulsion of unvoiced consonants to engage abdominal wall elasticity." },
+  { title: "Minor Octave Leap (1-8-7-6-5-4-3-2-1)", desc: "Ascend 1 to 8 on 'Ha', descend smoothly to build upper register agility." }
 ];
 
 export default function App() {
@@ -16,30 +18,38 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  
-  // NAVIGATION TABS
-  const [directorTab, setDirectorTab] = useState('attendance'); 
-  const [studentTab, setStudentTab] = useState('overview'); 
-  const [viewAsStudentMode, setViewAsStudentMode] = useState(false);
 
-  // FINANCIAL BUDGET STATE
+  // PASSWORD CHANGE MODAL
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [oldPass, setOldPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [passUpdateMsg, setPassUpdateMsg] = useState('');
+
+  // TABS
+  const [directorTab, setDirectorTab] = useState('welcome');
+  const [clcTab, setClcTab] = useState('attendance');
+
+  // DATA STATES
+  const [students, setStudents] = useState([]);
+  const [eventsList, setEventsList] = useState([]);
   const [budgetTransactions, setBudgetTransactions] = useState([]);
-  const [transDate, setTransDate] = useState('');
-  const [transCategory, setTransCategory] = useState('SchoolCashOnline Dues');
+  const [startingBudget, setStartingBudget] = useState(0);
+  const [newStartingBudget, setNewStartingBudget] = useState('');
+
+  // NEW TRANSACTION FORM STATE
+  const [transDate, setTransDate] = useState(new Date().toISOString().split('T')[0]);
+  const [transCategory, setTransCategory] = useState('Dues');
   const [transDesc, setTransDesc] = useState('');
   const [transType, setTransType] = useState('income');
   const [transAmount, setTransAmount] = useState('');
-  const [transYear, setTransYear] = useState('2026-2027');
-
-  // MASTER ROSTER & RISERS
-  const [students, setStudents] = useState([]);
-  const [eventsList, setEventsList] = useState([]);
+  const [transStudentId, setTransStudentId] = useState('');
 
   useEffect(() => {
     if (currentUser) {
       fetchStudents();
       fetchEvents();
       fetchBudget();
+      fetchStartingBudget();
     }
   }, [currentUser]);
 
@@ -64,35 +74,53 @@ export default function App() {
     } catch (e) { console.error(e); }
   };
 
-  const handleAddBudgetTransaction = async (e) => {
-    e.preventDefault();
+  const fetchStartingBudget = async () => {
     try {
-      await fetch(`${API_BASE}/budget`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trans_date: transDate || new Date().toISOString().split('T')[0],
-          category: transCategory,
-          description: transDesc,
-          trans_type: transType,
-          amount: parseFloat(transAmount),
-          school_year: transYear
-        })
-      });
-      setTransDesc('');
-      setTransAmount('');
-      fetchBudget();
+      const res = await fetch(`${API_BASE}/budget/starting`);
+      if (res.ok) {
+        const data = await res.json();
+        setStartingBudget(data.starting_budget || 0);
+      }
     } catch (e) { console.error(e); }
   };
 
-  const handleUpdateStudentPayment = async (studentId, newAmount) => {
+  const handleUpdateStartingBudget = async (e) => {
+    e.preventDefault();
     try {
-      await fetch(`${API_BASE}/students/payment`, {
+      const res = await fetch(`${API_BASE}/budget/starting`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_id: studentId, amount: parseFloat(newAmount) })
+        body: JSON.stringify({ starting_budget: parseFloat(newStartingBudget || 0) })
       });
-      fetchStudents();
+      if (res.ok) {
+        fetchStartingBudget();
+        setNewStartingBudget('');
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleAddTransaction = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE}/budget`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trans_date: transDate,
+          category: transCategory,
+          description: transDesc,
+          trans_type: transType,
+          amount: parseFloat(transAmount || 0),
+          student_id: transStudentId || null
+        })
+      });
+      if (res.ok) {
+        fetchBudget();
+        fetchStudents();
+        setTransDesc('');
+        setTransAmount('');
+        setTransStudentId('');
+      }
     } catch (e) { console.error(e); }
   };
 
@@ -101,16 +129,13 @@ export default function App() {
     setErrorMsg('');
     setIsLoggingIn(true);
 
-    const sanitizedId = loginId.trim();
-    const sanitizedPassword = password.trim();
-
     try {
       const res = await fetch(`${API_BASE}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_id: sanitizedId, password: sanitizedPassword })
+        body: JSON.stringify({ student_id: loginId.trim(), password: password.trim() })
       });
-      
+
       const data = await res.json();
       setIsLoggingIn(false);
 
@@ -118,43 +143,81 @@ export default function App() {
         setCurrentUser(data);
         setPassword('');
       } else {
-        setErrorMsg(data.message || 'Invalid Student ID or Password. (Note: Director ID is ADMIN)');
+        setErrorMsg(data.message || 'Invalid Student ID or Password.');
       }
     } catch (err) {
       setIsLoggingIn(false);
-      setErrorMsg('Server warming up or offline. Please wait 10 seconds and try again.');
+      setErrorMsg('Server offline or warming up. Please try again.');
     }
   };
 
-  const getRequiredDues = (ensembleName) => {
-    const tier85 = ['Master Singers', 'Bella Voce', 'Olympian Voices'];
-    return tier85.includes(ensembleName) ? 85.0 : 55.0;
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPassUpdateMsg('');
+    try {
+      const res = await fetch(`${API_BASE}/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: currentUser.student_id,
+          old_password: oldPass,
+          new_password: newPass
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPassUpdateMsg('✅ Password updated successfully!');
+        setOldPass('');
+        setNewPass('');
+      } else {
+        setPassUpdateMsg(`❌ ${data.message}`);
+      }
+    } catch (e) {
+      setPassUpdateMsg('❌ Error changing password.');
+    }
   };
 
-  // LOGIN SCREEN WITH OLYMPIA LOGO RESTORED
+  const handleRoleChange = async (studentId, newRole) => {
+    try {
+      await fetch(`${API_BASE}/students/role`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId, role: newRole })
+      });
+      fetchStudents();
+    } catch (e) { console.error(e); }
+  };
+
+  const getDailyWarmups = () => {
+    const today = new Date();
+    const dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
+    const index1 = dayOfYear % WARMUP_BANK.length;
+    const index2 = (dayOfYear + 2) % WARMUP_BANK.length;
+    const index3 = (dayOfYear + 4) % WARMUP_BANK.length;
+    return [WARMUP_BANK[index1], WARMUP_BANK[index2], WARMUP_BANK[index3]];
+  };
+
+  const formattedToday = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  // FINANCIAL TOTALS
+  const totalIncome = budgetTransactions.filter(t => t.trans_type === 'income').reduce((acc, t) => acc + t.amount, 0);
+  const totalExpenses = budgetTransactions.filter(t => t.trans_type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+  const currentBalance = startingBudget + totalIncome - totalExpenses;
+
+  // LOGIN SCREEN
   if (!currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-4">
         <div className="bg-slate-900 border border-teal-800/60 p-8 rounded-xl shadow-2xl max-w-md w-full text-center">
-          
-          {/* RESTORED OLYMPIA TITAN CHORUS LOGO */}
           <div className="mb-6">
-            <a 
-              href="https://www.instagram.com/olympiatitanchorus" 
-              target="_blank" 
-              rel="noreferrer" 
-              className="inline-block transform hover:scale-105 transition mb-3"
-            >
-              <img
-                src="/Olympia Titan Chorus 26 Logo - 3.PNG"
-                alt="Olympia High School Titan Chorus Crest"
-                className="w-28 h-28 mx-auto rounded-full border-2 border-teal-400 shadow-xl object-cover bg-slate-950"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.style.display = 'none';
-                }}
-              />
-            </a>
+            <img
+              src="/Olympia Titan Chorus 26 Logo - 3.PNG"
+              alt="Olympia Logo"
+              className="w-28 h-28 mx-auto rounded-full border-2 border-teal-400 shadow-xl object-cover bg-slate-950 mb-3"
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
             <h1 className="text-2xl font-bold text-teal-400">Olympia High School</h1>
             <h2 className="text-xl font-semibold text-slate-200">Titan Chorus Hub</h2>
             <p className="text-xs text-slate-400 mt-1">Director: Cesar Lengua-Miranda</p>
@@ -166,7 +229,7 @@ export default function App() {
               <input
                 type="text"
                 required
-                placeholder="Enter Student ID or ADMIN"
+                placeholder="Student ID or ADMIN"
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-teal-400"
@@ -194,7 +257,7 @@ export default function App() {
             <button
               type="submit"
               disabled={isLoggingIn}
-              className="w-full bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg transition shadow-md"
+              className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2.5 rounded-lg transition shadow-md"
             >
               {isLoggingIn ? 'Connecting...' : 'Sign In'}
             </button>
@@ -204,306 +267,11 @@ export default function App() {
     );
   }
 
-  const isDirector = currentUser.role === 'director';
-
-  const renderDirectorBudgetHub = () => {
-    const totalIncome = budgetTransactions.filter(t => t.trans_type === 'income').reduce((sum, t) => sum + t.amount, 0);
-    const totalExpense = budgetTransactions.filter(t => t.trans_type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-    const netBalance = totalIncome - totalExpense;
-
-    return (
-      <section className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-slate-900 border border-emerald-500/40 p-5 rounded-xl">
-            <h4 className="text-xs font-bold uppercase text-emerald-400">Total Program Revenue</h4>
-            <p className="text-3xl font-extrabold text-white mt-2">${totalIncome.toFixed(2)}</p>
-          </div>
-          <div className="bg-slate-900 border border-rose-500/40 p-5 rounded-xl">
-            <h4 className="text-xs font-bold uppercase text-rose-400">Total Expenses & Payouts</h4>
-            <p className="text-3xl font-extrabold text-white mt-2">${totalExpense.toFixed(2)}</p>
-          </div>
-          <div className="bg-slate-900 border border-teal-500/40 p-5 rounded-xl">
-            <h4 className="text-xs font-bold uppercase text-teal-400">Net Program Balance</h4>
-            <p className={`text-3xl font-extrabold mt-2 ${netBalance >= 0 ? 'text-teal-300' : 'text-rose-400'}`}>
-              ${netBalance.toFixed(2)}
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handleAddBudgetTransaction} className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
-          <h3 className="text-sm font-bold text-teal-400 uppercase">+ Log Program Income or Expense</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <input
-              type="date"
-              required
-              value={transDate}
-              onChange={(e) => setTransDate(e.target.value)}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
-            />
-            <select
-              value={transType}
-              onChange={(e) => setTransType(e.target.value)}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white font-bold"
-            >
-              <option value="income">🟢 Income / Revenue</option>
-              <option value="expense">🔴 Program Expense</option>
-            </select>
-            <select
-              value={transCategory}
-              onChange={(e) => setTransCategory(e.target.value)}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
-            >
-              <option value="SchoolCashOnline Dues">SchoolCashOnline Dues</option>
-              <option value="Fundraiser Revenue">Fundraiser Revenue</option>
-              <option value="VPA Resource Grant">VPA Resource Grant</option>
-              <option value="ICA Contractor Payout">ICA Contractor Payout</option>
-              <option value="All-State Registration">All-State Audition Registration</option>
-              <option value="FVA MPA Registration">FVA MPA Registration</option>
-              <option value="Sheet Music Purchase">Sheet Music Purchase</option>
-              <option value="Uniforms & Apparel">Uniforms & Apparel</option>
-            </select>
-            <input
-              type="number"
-              step="0.01"
-              required
-              placeholder="Amount ($)"
-              value={transAmount}
-              onChange={(e) => setTransAmount(e.target.value)}
-              className="bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white font-bold"
-            />
-          </div>
-
-          <div className="flex gap-3">
-            <input
-              type="text"
-              required
-              placeholder="Transaction Memo / Description (e.g. Fall MPA Accompanist Payout)"
-              value={transDesc}
-              onChange={(e) => setTransDesc(e.target.value)}
-              className="flex-1 bg-slate-800 border border-slate-700 px-3 py-2 rounded text-xs text-white"
-            />
-            <button type="submit" className="bg-teal-600 hover:bg-teal-500 text-white font-bold px-6 py-2 rounded text-xs">
-              Save Transaction
-            </button>
-          </div>
-        </form>
-
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-          <h3 className="text-sm font-bold text-slate-200 mb-3">Program Financial Ledger</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 uppercase">
-                  <th className="py-2 px-2">Date</th>
-                  <th className="py-2 px-2">Category</th>
-                  <th className="py-2 px-2">Description</th>
-                  <th className="py-2 px-2">Type</th>
-                  <th className="py-2 px-2">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {budgetTransactions.map((t) => (
-                  <tr key={t.id}>
-                    <td className="py-2 px-2 font-mono text-slate-400">{t.trans_date}</td>
-                    <td className="py-2 px-2 text-teal-300 font-semibold">{t.category}</td>
-                    <td className="py-2 px-2 text-slate-200">{t.description}</td>
-                    <td className="py-2 px-2 uppercase font-bold text-[10px]">
-                      <span className={t.trans_type === 'income' ? 'text-emerald-400' : 'text-rose-400'}>{t.trans_type}</span>
-                    </td>
-                    <td className={`py-2 px-2 font-mono font-bold ${t.trans_type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {t.trans_type === 'income' ? '+' : '-'}${t.amount.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-    );
-  };
-
-  const renderStudentBalanceTab = () => {
-    const reqDues = getRequiredDues(currentUser.ensemble);
-    const paidAmt = currentUser.dues_paid_amount || 0.0;
-    const isPaidInFull = paidAmt >= reqDues;
-    const remaining = Math.max(0, reqDues - paidAmt);
-    const pct = Math.min(100, Math.round((paidAmt / reqDues) * 100));
-
-    return (
-      <div className="max-w-xl mx-auto space-y-6">
-        <div className={`p-6 rounded-xl border text-center space-y-4 shadow-xl ${
-          isPaidInFull ? 'bg-emerald-950/60 border-emerald-500' : 'bg-rose-950/60 border-rose-500'
-        }`}>
-          <span className="text-xs uppercase tracking-widest font-bold text-slate-300">
-            {currentUser.ensemble} Fair Share Dues Status
-          </span>
-
-          <div className="py-2">
-            <span className={`text-4xl font-extrabold font-mono ${isPaidInFull ? 'text-emerald-300' : 'text-rose-400'}`}>
-              ${paidAmt.toFixed(2)} /${reqDues.toFixed(2)}
-            </span>
-          </div>
-
-          <div className="w-full bg-slate-900 h-4 rounded-full overflow-hidden border border-slate-700">
-            <div
-              className={`h-full transition-all duration-500 ${isPaidInFull ? 'bg-emerald-500' : 'bg-rose-500'}`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-
-          <div className="pt-2">
-            {isPaidInFull ? (
-              <span className="inline-block bg-emerald-500 text-slate-950 font-black px-4 py-2 rounded-lg text-sm">
-                ✓ PAID IN FULL — Thank You!
-              </span>
-            ) : (
-              <div className="space-y-1">
-                <span className="inline-block bg-rose-600 text-white font-bold px-4 py-1.5 rounded-lg text-xs">
-                  ⚠️ Outstanding Balance: ${remaining.toFixed(2)} Remaining
-                </span>
-                <p className="text-[11px] text-slate-300">
-                  Please submit payment through <strong>SchoolCashOnline</strong> to update your account balance.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  if (isDirector && !viewAsStudentMode) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
-        <header className="flex justify-between items-center border-b border-teal-900/60 pb-4 mb-6">
-          <div className="flex items-center space-x-3">
-            <img
-              src="/Olympia Titan Chorus 26 Logo - 3.PNG"
-              alt="Olympia Logo"
-              className="w-10 h-10 rounded-full border border-teal-400 object-cover"
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-            <div>
-              <h1 className="text-2xl font-bold text-teal-400">Titan Chorus Director Portal</h1>
-              <p className="text-xs text-slate-400">Director: {currentUser.name}</p>
-            </div>
-          </div>
-          <div className="flex space-x-3">
-            <button
-              onClick={() => setViewAsStudentMode(true)}
-              className="bg-teal-950 border border-teal-400 text-teal-300 text-xs font-bold px-3 py-2 rounded-lg"
-            >
-              👁 Student View
-            </button>
-            <button onClick={() => setCurrentUser(null)} className="bg-slate-800 text-slate-300 text-sm px-4 py-2 rounded-lg">
-              Sign Out
-            </button>
-          </div>
-        </header>
-
-        <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3 mb-6">
-          {[
-            { id: 'attendance', label: '📍 GPS Attendance' },
-            { id: 'music', label: '🎼 Music Library' },
-            { id: 'risers', label: '🎶 Riser Charts' },
-            { id: 'roster', label: '📋 Roster Management' },
-            { id: 'budget', label: '💰 Program Budget & Finances' }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setDirectorTab(tab.id)}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition border ${
-                directorTab === tab.id
-                  ? 'bg-teal-600 text-white border-teal-400'
-                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {directorTab === 'attendance' && (
-          <section className="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-4">
-            <h3 className="text-lg font-bold text-teal-400">📍 Active GPS Event Geofences</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {eventsList.map((e) => (
-                <div key={e.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-                  <h4 className="font-bold text-white">{e.title}</h4>
-                  <p className="text-xs text-teal-300">{e.location_name} • {e.event_date}</p>
-                  <p className="text-xs text-slate-400 mt-1">Call Time: {e.call_time} (Radius: {e.radius_feet} ft)</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {directorTab === 'risers' && (
-          <section className="bg-slate-900 p-6 rounded-xl border border-slate-800 text-center">
-            <h3 className="text-lg font-bold text-teal-400 mb-2">🎶 Interactive Choral Riser Layout</h3>
-            <p className="text-xs text-slate-400">Riser Map layout active for 6 standard Risers + Overflow.</p>
-          </section>
-        )}
-
-        {directorTab === 'roster' && (
-          <section className="bg-slate-900 p-6 rounded-xl border border-slate-800">
-            <h3 className="text-lg font-bold text-teal-400 mb-4">📋 Class Roster & SchoolCashOnline Tracking</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 uppercase">
-                    <th className="py-2 px-2">Student ID</th>
-                    <th className="py-2 px-2">Name</th>
-                    <th className="py-2 px-2">Ensemble</th>
-                    <th className="py-2 px-2">Paid Dues ($)</th>
-                    <th className="py-2 px-2">Required Dues</th>
-                    <th className="py-2 px-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {students.map((s) => {
-                    const req = getRequiredDues(s.ensemble);
-                    const paid = s.dues_paid_amount || 0.0;
-                    const complete = paid >= req;
-                    return (
-                      <tr key={s.student_id}>
-                        <td className="py-2 px-2 font-mono text-teal-400">{s.student_id}</td>
-                        <td className="py-2 px-2 font-bold text-white">{s.last_name}, {s.first_name}</td>
-                        <td className="py-2 px-2 text-slate-300">{s.ensemble}</td>
-                        <td className="py-2 px-2">
-                          <input
-                            type="number"
-                            step="5"
-                            value={paid}
-                            onChange={(e) => handleUpdateStudentPayment(s.student_id, e.target.value)}
-                            className="w-20 bg-slate-800 border border-slate-700 px-2 py-1 rounded text-white text-xs font-mono font-bold"
-                          />
-                        </td>
-                        <td className="py-2 px-2 font-mono text-slate-400">${req.toFixed(2)}</td>
-                        <td className="py-2 px-2 font-bold">
-                          {complete ? (
-                            <span className="text-emerald-400">✓ Paid</span>
-                          ) : (
-                            <span className="text-rose-400">Unpaid (${(req - paid).toFixed(2)})</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
-        {directorTab === 'budget' && renderDirectorBudgetHub()}
-      </div>
-    );
-  }
+  const role = currentUser.role;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
+      {/* HEADER */}
       <header className="flex justify-between items-center border-b border-teal-900/60 pb-4 mb-6">
         <div className="flex items-center space-x-3">
           <img
@@ -513,38 +281,337 @@ export default function App() {
             onError={(e) => { e.target.style.display = 'none'; }}
           />
           <div>
-            <h1 className="text-2xl font-bold text-teal-400">Titan Chorus Student Hub</h1>
-            <p className="text-xs text-slate-400">Welcome, {currentUser.name}</p>
+            <h1 className="text-xl font-bold text-teal-400">Titan Chorus Hub</h1>
+            <p className="text-xs text-slate-400">{currentUser.name} ({role.toUpperCase()})</p>
           </div>
         </div>
-        <button onClick={() => setCurrentUser(null)} className="bg-slate-800 text-slate-300 text-sm px-4 py-2 rounded-lg">
-          Sign Out
-        </button>
+
+        <div className="flex space-x-2">
+          <button onClick={() => setShowPasswordModal(true)} className="bg-slate-800 border border-slate-700 text-xs text-slate-200 px-3 py-2 rounded-lg">🔑 Password</button>
+          <button onClick={() => setCurrentUser(null)} className="bg-rose-950 border border-rose-800 text-xs text-rose-200 px-3 py-2 rounded-lg">Sign Out</button>
+        </div>
       </header>
 
-      <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3 mb-6">
-        <button
-          onClick={() => setStudentTab('overview')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold ${studentTab === 'overview' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}
-        >
-          My Profile
-        </button>
-        <button
-          onClick={() => setStudentTab('balance')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold ${studentTab === 'balance' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}
-        >
-          💳 Fair Share Dues Balance
-        </button>
-      </div>
+      {/* PASSWORD MODAL */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-700 p-6 rounded-xl max-w-sm w-full space-y-4">
+            <h3 className="text-md font-bold text-teal-400">Change Password</h3>
+            <form onSubmit={handleChangePassword} className="space-y-3">
+              <input type="password" required placeholder="Current Password" value={oldPass} onChange={(e) => setOldPass(e.target.value)} className="w-full bg-slate-800 border border-slate-700 p-2 rounded text-xs text-white" />
+              <input type="password" required placeholder="New Password" value={newPass} onChange={(e) => setNewPass(e.target.value)} className="w-full bg-slate-800 border border-slate-700 p-2 rounded text-xs text-white" />
+              {passUpdateMsg && <p className="text-xs text-center font-bold">{passUpdateMsg}</p>}
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setShowPasswordModal(false)} className="bg-slate-800 text-xs px-3 py-1.5 rounded">Close</button>
+                <button type="submit" className="bg-teal-600 text-xs font-bold px-4 py-1.5 rounded text-white">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-      {studentTab === 'overview' && (
+      {/* DIRECTOR TABS */}
+      {role === 'director' && (
+        <div>
+          <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3 mb-6">
+            {[
+              { id: 'welcome', label: '🏠 Welcome Hub' },
+              { id: 'budget', label: '💰 Program Finances & Dues' },
+              { id: 'roster', label: '📋 Roster & Roles' },
+              { id: 'attendance', label: '📍 GPS Attendance' },
+              { id: 'risers', label: '🎶 Riser Charts' }
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setDirectorTab(t.id)}
+                className={`px-4 py-2 rounded-lg text-xs font-bold border transition ${
+                  directorTab === t.id ? 'bg-teal-600 text-white border-teal-400' : 'bg-slate-900 text-slate-400 border-slate-800'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {directorTab === 'welcome' && (
+            <div className="space-y-6">
+              <div className="bg-slate-900 border border-teal-500/40 p-6 rounded-xl flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-extrabold text-white">Welcome, Director Lengua-Miranda!</h2>
+                  <p className="text-xs text-teal-400 mt-1">Olympia Titan Chorus Command Center</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs uppercase font-bold text-slate-400 block">Today's Date</span>
+                  <span className="text-sm font-mono font-bold text-teal-300">{formattedToday}</span>
+                </div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider">🎶 Today's Daily Vocal Warm-Up Routine</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {getDailyWarmups().map((w, idx) => (
+                    <div key={idx} className="bg-slate-950 p-4 rounded-xl border border-teal-900/40 space-y-2">
+                      <span className="text-[10px] uppercase font-extrabold text-teal-400 bg-teal-950 px-2 py-0.5 rounded">Exercise #{idx + 1}</span>
+                      <h4 className="font-bold text-white text-sm">{w.title}</h4>
+                      <p className="text-xs text-slate-300 leading-relaxed">{w.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-sm font-bold text-teal-400 uppercase tracking-wider">📅 Titan Chorus Calendar</h3>
+                <div className="w-full h-96 bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
+                  <iframe
+                    src="https://calendar.google.com/calendar/embed?src=en.usa%23holiday%40group.v.calendar.google.com&ctz=America%2FNew_York"
+                    style={{ border: 0, width: '100%', height: '100%' }}
+                    frameBorder="0"
+                    scrolling="no"
+                    title="Chorus Calendar"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* BUDGET & FINANCES TAB */}
+          {directorTab === 'budget' && (
+            <div className="space-y-6">
+              {/* STARTING BUDGET & OVERVIEW STATS */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
+                  <span className="text-xs uppercase font-bold text-slate-400 block">Starting Budget</span>
+                  <div className="text-2xl font-mono font-bold text-amber-400">${startingBudget.toFixed(2)}</div>
+                  <form onSubmit={handleUpdateStartingBudget} className="flex gap-2 pt-1">
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="New starting $"
+                      value={newStartingBudget}
+                      onChange={(e) => setNewStartingBudget(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                    />
+                    <button type="submit" className="bg-amber-600 text-white font-bold text-xs px-2 py-1 rounded">Set</button>
+                  </form>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
+                  <span className="text-xs uppercase font-bold text-emerald-400 block">Total Revenue</span>
+                  <div className="text-2xl font-mono font-bold text-emerald-300">+${totalIncome.toFixed(2)}</div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
+                  <span className="text-xs uppercase font-bold text-rose-400 block">Total Expenses</span>
+                  <div className="text-2xl font-mono font-bold text-rose-300">-${totalExpenses.toFixed(2)}</div>
+                </div>
+
+                <div className="bg-slate-900 border border-teal-500/50 p-4 rounded-xl space-y-1">
+                  <span className="text-xs uppercase font-bold text-teal-400 block">Net Available Balance</span>
+                  <div className="text-2xl font-mono font-bold text-teal-200">${currentBalance.toFixed(2)}</div>
+                </div>
+              </div>
+
+              {/* LOG TRANSACTION / DUES FORM */}
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-md font-bold text-teal-400">💵 Record Payment or Expense</h3>
+                <form onSubmit={handleAddTransaction} className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Date</label>
+                    <input type="date" required value={transDate} onChange={(e) => setTransDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Type</label>
+                    <select value={transType} onChange={(e) => setTransType(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white">
+                      <option value="income">Income (+)</option>
+                      <option value="expense">Expense (-)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Attach to Student</label>
+                    <select value={transStudentId} onChange={(e) => setTransStudentId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white">
+                      <option value="">(None - General Program)</option>
+                      {students.filter(s => s.role !== 'director').map(s => (
+                        <option key={s.student_id} value={s.student_id}>{s.name} ({s.student_id})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Category</label>
+                    <input type="text" required placeholder="e.g. Fair Share Dues" value={transCategory} onChange={(e) => setTransCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Amount ($)</label>
+                    <input type="number" step="0.01" required placeholder="100.00" value={transAmount} onChange={(e) => setTransAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
+                  </div>
+
+                  <div className="flex items-end">
+                    <button type="submit" className="w-full bg-teal-600 hover:bg-teal-500 font-bold text-xs py-2 rounded text-white shadow">Log Entry</button>
+                  </div>
+                </form>
+              </div>
+
+              {/* RECENT FINANCIAL LEDGER */}
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-md font-bold text-teal-400">📜 Financial Ledger</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 uppercase">
+                        <th className="py-2 px-2">Date</th>
+                        <th className="py-2 px-2">Type</th>
+                        <th className="py-2 px-2">Category</th>
+                        <th className="py-2 px-2">Attached Student</th>
+                        <th className="py-2 px-2 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {budgetTransactions.map((t) => {
+                        const linkedStudent = students.find(s => s.student_id === t.student_id);
+                        return (
+                          <tr key={t.id}>
+                            <td className="py-2 px-2 font-mono text-slate-400">{t.trans_date}</td>
+                            <td className="py-2 px-2 uppercase font-bold text-[10px]">
+                              <span className={t.trans_type === 'income' ? 'text-emerald-400' : 'text-rose-400'}>
+                                {t.trans_type}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 font-semibold text-white">{t.category}</td>
+                            <td className="py-2 px-2 text-slate-300">
+                              {linkedStudent ? `${linkedStudent.name} (${linkedStudent.student_id})` : '-'}
+                            </td>
+                            <td className={`py-2 px-2 font-mono font-bold text-right ${t.trans_type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {t.trans_type === 'income' ? '+' : '-'}${t.amount.toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {directorTab === 'roster' && (
+            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-4">
+              <h3 className="text-lg font-bold text-teal-400">📋 Roster & Student Dues Balance</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400 uppercase">
+                      <th className="py-2 px-2">ID</th>
+                      <th className="py-2 px-2">Name</th>
+                      <th className="py-2 px-2">Ensemble</th>
+                      <th className="py-2 px-2">Role</th>
+                      <th className="py-2 px-2">Total Paid to Date</th>
+                      <th className="py-2 px-2">Access Role Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {students.filter(s => s.role !== 'director').map((s) => (
+                      <tr key={s.student_id}>
+                        <td className="py-2 px-2 font-mono text-teal-400">{s.student_id}</td>
+                        <td className="py-2 px-2 font-bold text-white">{s.name}</td>
+                        <td className="py-2 px-2 text-slate-300">{s.ensemble}</td>
+                        <td className="py-2 px-2 uppercase font-bold text-xs">
+                          <span className={s.role === 'clc' ? 'text-amber-400' : s.role === 'alumni' ? 'text-indigo-400' : 'text-slate-400'}>
+                            {s.role}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 font-mono font-bold text-emerald-400">
+                          ${(s.dues_paid_amount || 0).toFixed(2)}
+                        </td>
+                        <td className="py-2 px-2 space-x-2">
+                          <button onClick={() => handleRoleChange(s.student_id, 'clc')} className="bg-amber-950 text-amber-300 px-2 py-1 rounded text-[10px] font-bold">Set CLC</button>
+                          <button onClick={() => handleRoleChange(s.student_id, 'student')} className="bg-slate-800 text-slate-300 px-2 py-1 rounded text-[10px]">Set Student</button>
+                          <button onClick={() => handleRoleChange(s.student_id, 'alumni')} className="bg-indigo-950 text-indigo-300 px-2 py-1 rounded text-[10px] font-bold">Graduate</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {directorTab === 'attendance' && (
+            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-4">
+              <h3 className="text-lg font-bold text-teal-400">📍 Active GPS Event Geofences</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {eventsList.map((e) => (
+                  <div key={e.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                    <h4 className="font-bold text-white">{e.title}</h4>
+                    <p className="text-xs text-teal-300">{e.location_name} • {e.event_date}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {directorTab === 'risers' && (
+            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 text-center">
+              <h3 className="text-lg font-bold text-teal-400 mb-2">🎶 Interactive Choral Riser Layout</h3>
+              <p className="text-xs text-slate-400">Riser Map active for all ensembles.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CLC VIEW */}
+      {role === 'clc' && (
+        <div className="space-y-6">
+          <div className="bg-amber-950/40 border border-amber-500/50 p-4 rounded-xl">
+            <h2 className="text-lg font-bold text-amber-300">⭐ Choir Leadership Council (CLC) Hub</h2>
+            <p className="text-xs text-amber-200/80">Authorized attendance check-in & riser monitoring access.</p>
+          </div>
+
+          <div className="flex gap-2 border-b border-slate-800 pb-3">
+            <button onClick={() => setClcTab('attendance')} className={`px-4 py-2 rounded-lg text-xs font-bold ${clcTab === 'attendance' ? 'bg-amber-600 text-white' : 'bg-slate-900 text-slate-400'}`}>📍 GPS Attendance Check</button>
+            <button onClick={() => setClcTab('risers')} className={`px-4 py-2 rounded-lg text-xs font-bold ${clcTab === 'risers' ? 'bg-amber-600 text-white' : 'bg-slate-900 text-slate-400'}`}>🎶 Riser Maps</button>
+          </div>
+
+          {clcTab === 'attendance' && (
+            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
+              <h3 className="text-sm font-bold text-amber-400 mb-3">Live Geofence Check-in Status</h3>
+              <p className="text-xs text-slate-400">View real-time student check-in markers for upcoming performances.</p>
+            </div>
+          )}
+
+          {clcTab === 'risers' && (
+            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
+              <h3 className="text-sm font-bold text-amber-400 mb-3">Choral Riser Map</h3>
+              <p className="text-xs text-slate-400">Verify row positions and voice placements for rehearsals.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ALUMNI VIEW */}
+      {role === 'alumni' && (
+        <div className="space-y-6 max-w-3xl mx-auto">
+          <div className="bg-indigo-950/60 border border-indigo-500/50 p-6 rounded-xl text-center space-y-2">
+            <h2 className="text-2xl font-extrabold text-indigo-300">🎓 Titan Chorus Alumni Portal</h2>
+            <p className="text-xs text-slate-300">Once a Titan, always a Titan. Stay connected with the program!</p>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+            <h3 className="text-sm font-bold text-indigo-400 uppercase">💌 Send Thanks & Encouragement to Director Lengua-Miranda</h3>
+            <a href="mailto:Cesar.Lengua@ocps.net?subject=Olympia%20Titan%20Chorus%20Alumni%20Note" className="inline-block bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2.5 rounded-lg text-xs">✉️ Write Thank You Email</a>
+          </div>
+        </div>
+      )}
+
+      {/* REGULAR STUDENT VIEW */}
+      {role === 'student' && (
         <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
           <h3 className="text-lg font-bold text-teal-400 mb-2">{currentUser.ensemble}</h3>
           <p className="text-sm text-slate-300">Voice Part: {currentUser.voice_part}</p>
         </div>
       )}
-
-      {studentTab === 'balance' && renderStudentBalanceTab()}
     </div>
   );
 }
