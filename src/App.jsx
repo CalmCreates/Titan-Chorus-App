@@ -15,10 +15,11 @@ export default function App() {
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   // NAVIGATION TABS
-  const [directorTab, setDirectorTab] = useState('attendance'); // 'attendance', 'music', 'risers', 'roster', 'budget'
-  const [studentTab, setStudentTab] = useState('overview'); // 'overview', 'balance', 'attendance', 'uniform', 'fva', 'ear'
+  const [directorTab, setDirectorTab] = useState('attendance'); 
+  const [studentTab, setStudentTab] = useState('overview'); 
   const [viewAsStudentMode, setViewAsStudentMode] = useState(false);
 
   // FINANCIAL BUDGET STATE
@@ -33,18 +34,6 @@ export default function App() {
   // MASTER ROSTER & RISERS
   const [students, setStudents] = useState([]);
   const [eventsList, setEventsList] = useState([]);
-  const [selectedEventReport, setSelectedEventReport] = useState(null);
-  const [eventReportData, setEventReportData] = useState([]);
-  const [checkInStatusMsg, setCheckInStatusMsg] = useState('');
-
-  // New Event Form State
-  const [newEventTitle, setNewEventTitle] = useState('');
-  const [newEventLocation, setNewEventLocation] = useState('OHS Choir Room');
-  const [newEventDate, setNewEventDate] = useState('');
-  const [newEventCallTime, setNewEventCallTime] = useState('');
-  const [newEventLat, setNewEventLat] = useState(28.5284);
-  const [newEventLon, setNewEventLon] = useState(-81.5471);
-  const [newEventRadius, setNewEventRadius] = useState(150);
 
   useEffect(() => {
     if (currentUser) {
@@ -110,60 +99,104 @@ export default function App() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setIsLoggingIn(true);
+
+    const sanitizedId = loginId.trim();
+    const sanitizedPassword = password.trim();
+
     try {
       const res = await fetch(`${API_BASE}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_id: loginId, password })
+        body: JSON.stringify({ student_id: sanitizedId, password: sanitizedPassword })
       });
+      
       const data = await res.json();
+      setIsLoggingIn(false);
+
       if (data.success) {
         setCurrentUser(data);
         setPassword('');
       } else {
-        setErrorMsg('Invalid Student ID or Password');
+        setErrorMsg(data.message || 'Invalid Student ID or Password. (Note: Director ID is ADMIN)');
       }
     } catch (err) {
-      setErrorMsg('Connection error.');
+      setIsLoggingIn(false);
+      setErrorMsg('Server warming up or offline. Please wait 10 seconds and try again.');
     }
   };
 
-  // Calculate Ensemble Dues Threshold ($55 or $85)
   const getRequiredDues = (ensembleName) => {
     const tier85 = ['Master Singers', 'Bella Voce', 'Olympian Voices'];
     return tier85.includes(ensembleName) ? 85.0 : 55.0;
   };
 
+  // LOGIN SCREEN WITH OLYMPIA LOGO RESTORED
   if (!currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-4">
         <div className="bg-slate-900 border border-teal-800/60 p-8 rounded-xl shadow-2xl max-w-md w-full text-center">
-          <h1 className="text-2xl font-bold text-teal-400 mb-1">Olympia High School</h1>
-          <h2 className="text-xl font-semibold text-slate-200 mb-6">Titan Chorus Hub</h2>
+          
+          {/* RESTORED OLYMPIA TITAN CHORUS LOGO */}
+          <div className="mb-6">
+            <a 
+              href="https://www.instagram.com/olympiatitanchorus" 
+              target="_blank" 
+              rel="noreferrer" 
+              className="inline-block transform hover:scale-105 transition mb-3"
+            >
+              <img
+                src="/Olympia Titan Chorus 26 Logo - 3.PNG"
+                alt="Olympia High School Titan Chorus Crest"
+                className="w-28 h-28 mx-auto rounded-full border-2 border-teal-400 shadow-xl object-cover bg-slate-950"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.style.display = 'none';
+                }}
+              />
+            </a>
+            <h1 className="text-2xl font-bold text-teal-400">Olympia High School</h1>
+            <h2 className="text-xl font-semibold text-slate-200">Titan Chorus Hub</h2>
+            <p className="text-xs text-slate-400 mt-1">Director: Cesar Lengua-Miranda</p>
+          </div>
+
           <form onSubmit={handleLogin} className="space-y-4 text-left">
             <div>
-              <label className="block text-xs uppercase text-slate-400 mb-1">Student ID / Admin</label>
+              <label className="block text-xs uppercase font-bold text-slate-400 mb-1">Student ID / Admin</label>
               <input
                 type="text"
                 required
+                placeholder="Enter Student ID or ADMIN"
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-teal-400"
               />
             </div>
+
             <div>
-              <label className="block text-xs uppercase text-slate-400 mb-1">Password</label>
+              <label className="block text-xs uppercase font-bold text-slate-400 mb-1">Password</label>
               <input
                 type="password"
                 required
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-teal-400"
               />
             </div>
-            {errorMsg && <p className="text-rose-400 text-xs">{errorMsg}</p>}
-            <button type="submit" className="w-full bg-teal-600 hover:bg-teal-500 font-bold py-2.5 rounded text-white transition">
-              Sign In
+
+            {errorMsg && (
+              <div className="p-3 bg-rose-950/80 border border-rose-500 rounded-lg text-rose-200 text-xs text-center font-semibold">
+                {errorMsg}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg transition shadow-md"
+            >
+              {isLoggingIn ? 'Connecting...' : 'Sign In'}
             </button>
           </form>
         </div>
@@ -173,7 +206,6 @@ export default function App() {
 
   const isDirector = currentUser.role === 'director';
 
-  // PROGRAM BUDGET & EXPENSE HUB RENDERER
   const renderDirectorBudgetHub = () => {
     const totalIncome = budgetTransactions.filter(t => t.trans_type === 'income').reduce((sum, t) => sum + t.amount, 0);
     const totalExpense = budgetTransactions.filter(t => t.trans_type === 'expense').reduce((sum, t) => sum + t.amount, 0);
@@ -198,7 +230,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* LOG TRANSACTION FORM */}
         <form onSubmit={handleAddBudgetTransaction} className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
           <h3 className="text-sm font-bold text-teal-400 uppercase">+ Log Program Income or Expense</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -257,7 +288,6 @@ export default function App() {
           </div>
         </form>
 
-        {/* FINANCIAL LEDGER TABLE */}
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
           <h3 className="text-sm font-bold text-slate-200 mb-3">Program Financial Ledger</h3>
           <div className="overflow-x-auto">
@@ -293,7 +323,6 @@ export default function App() {
     );
   };
 
-  // STUDENT ACCOUNT BALANCE TAB RENDERER
   const renderStudentBalanceTab = () => {
     const reqDues = getRequiredDues(currentUser.ensemble);
     const paidAmt = currentUser.dues_paid_amount || 0.0;
@@ -344,14 +373,21 @@ export default function App() {
     );
   };
 
-  // DIRECTOR ADMIN DASHBOARD VIEW WITH CLEAN TABBED SECTIONS
   if (isDirector && !viewAsStudentMode) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
         <header className="flex justify-between items-center border-b border-teal-900/60 pb-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-teal-400">Titan Chorus Director Portal</h1>
-            <p className="text-xs text-slate-400">Director: {currentUser.name}</p>
+          <div className="flex items-center space-x-3">
+            <img
+              src="/Olympia Titan Chorus 26 Logo - 3.PNG"
+              alt="Olympia Logo"
+              className="w-10 h-10 rounded-full border border-teal-400 object-cover"
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+            <div>
+              <h1 className="text-2xl font-bold text-teal-400">Titan Chorus Director Portal</h1>
+              <p className="text-xs text-slate-400">Director: {currentUser.name}</p>
+            </div>
           </div>
           <div className="flex space-x-3">
             <button
@@ -366,7 +402,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* SEPARATE CLEAN DIRECTORS NAVIGATION TABS */}
         <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3 mb-6">
           {[
             { id: 'attendance', label: '📍 GPS Attendance' },
@@ -389,7 +424,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* TAB 1: GPS ATTENDANCE */}
         {directorTab === 'attendance' && (
           <section className="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-4">
             <h3 className="text-lg font-bold text-teal-400">📍 Active GPS Event Geofences</h3>
@@ -405,7 +439,6 @@ export default function App() {
           </section>
         )}
 
-        {/* TAB 2: RISERS MAP */}
         {directorTab === 'risers' && (
           <section className="bg-slate-900 p-6 rounded-xl border border-slate-800 text-center">
             <h3 className="text-lg font-bold text-teal-400 mb-2">🎶 Interactive Choral Riser Layout</h3>
@@ -413,7 +446,6 @@ export default function App() {
           </section>
         )}
 
-        {/* TAB 3: ROSTER MANAGEMENT */}
         {directorTab === 'roster' && (
           <section className="bg-slate-900 p-6 rounded-xl border border-slate-800">
             <h3 className="text-lg font-bold text-teal-400 mb-4">📋 Class Roster & SchoolCashOnline Tracking</h3>
@@ -465,26 +497,31 @@ export default function App() {
           </section>
         )}
 
-        {/* TAB 4: PROGRAM BUDGET & EXPENSES */}
         {directorTab === 'budget' && renderDirectorBudgetHub()}
       </div>
     );
   }
 
-  // STUDENT VIEW
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
       <header className="flex justify-between items-center border-b border-teal-900/60 pb-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-teal-400">Titan Chorus Student Hub</h1>
-          <p className="text-xs text-slate-400">Welcome, {currentUser.name}</p>
+        <div className="flex items-center space-x-3">
+          <img
+            src="/Olympia Titan Chorus 26 Logo - 3.PNG"
+            alt="Olympia Logo"
+            className="w-10 h-10 rounded-full border border-teal-400 object-cover"
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+          <div>
+            <h1 className="text-2xl font-bold text-teal-400">Titan Chorus Student Hub</h1>
+            <p className="text-xs text-slate-400">Welcome, {currentUser.name}</p>
+          </div>
         </div>
         <button onClick={() => setCurrentUser(null)} className="bg-slate-800 text-slate-300 text-sm px-4 py-2 rounded-lg">
           Sign Out
         </button>
       </header>
 
-      {/* STUDENT NAVIGATION TABS */}
       <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3 mb-6">
         <button
           onClick={() => setStudentTab('overview')}
@@ -497,12 +534,6 @@ export default function App() {
           className={`px-4 py-2 rounded-lg text-xs font-semibold ${studentTab === 'balance' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}
         >
           💳 Fair Share Dues Balance
-        </button>
-        <button
-          onClick={() => setStudentTab('attendance')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold ${studentTab === 'attendance' ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400'}`}
-        >
-          📍 Event Attendance
         </button>
       </div>
 
