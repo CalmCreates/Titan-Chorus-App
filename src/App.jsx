@@ -40,26 +40,26 @@ const CHORD_PROMPTS = [
   { notes: ["C4", "E4", "G#4"], label: "Augmented Triad", options: ["Major Triad", "Minor Triad", "Diminished Triad", "Augmented Triad"] }
 ];
 
-const SHEET_MUSIC_LIBRARY = [
+const DEFAULT_MUSIC_LIBRARY = [
   {
     folder: "🍂 Fall Concert Collection",
     songs: [
-      { title: "Titan Anthem", pdfUrl: "#" },
-      { title: "Autumn Leaves Harmony", pdfUrl: "#" }
+      { id: 'f1', title: "Titan Anthem", pdfUrl: "", audioTracks: { soprano: "", alto: "", tenor: "", bass: "" } },
+      { id: 'f2', title: "Autumn Leaves Harmony", pdfUrl: "", audioTracks: { soprano: "", alto: "", tenor: "", bass: "" } }
     ]
   },
   {
     folder: "❄️ Holiday Festival Collection",
     songs: [
-      { title: "Carol of the Bells", pdfUrl: "#" },
-      { title: "Glow - Eric Whitacre", pdfUrl: "#" }
+      { id: 'h1', title: "Carol of the Bells", pdfUrl: "", audioTracks: { soprano: "", alto: "", tenor: "", bass: "" } },
+      { id: 'h2', title: "Glow - Eric Whitacre", pdfUrl: "", audioTracks: { soprano: "", alto: "", tenor: "", bass: "" } }
     ]
   },
   {
     folder: "🗺️ MPA Assessment List (State Standard)",
     songs: [
-      { title: "Ave Verum Corpus", pdfUrl: "#" },
-      { title: "Lacrymosa", pdfUrl: "#" }
+      { id: 'm1', title: "Ave Verum Corpus", pdfUrl: "", audioTracks: { soprano: "", alto: "", tenor: "", bass: "" } },
+      { id: 'm2', title: "Lacrymosa", pdfUrl: "", audioTracks: { soprano: "", alto: "", tenor: "", bass: "" } }
     ]
   }
 ];
@@ -107,18 +107,27 @@ export default function App() {
   const [startingBudget, setStartingBudget] = useState(0);
   const [newStartingBudget, setNewStartingBudget] = useState('');
 
+  // SHEET MUSIC & UPLOADED TRACKS
+  const [musicLibrary, setMusicLibrary] = useState(DEFAULT_MUSIC_LIBRARY);
+  const [newSongTitle, setNewSongTitle] = useState('');
+  const [newSongFolder, setNewSongFolder] = useState('🍂 Fall Concert Collection');
+
+  // RISER & ENSEMBLE FILTERING
   const [riserAssignments, setRiserAssignments] = useState({});
-  const [riserDisplayView, setRiserDisplayView] = useState('full');
+  const [selectedEnsembleFilter, setSelectedEnsembleFilter] = useState('ALL');
   const [selectedRiserSection, setSelectedRiserSection] = useState('A');
 
-  const [fvaMode, setFvaMode] = useState('study');
+  // SKYWARD CSV IMPORT STATUS
+  const [importStatusMsg, setImportStatusMsg] = useState('');
+
+  // FVA TERMS STATE
   const [fvaCardIndex, setFvaCardIndex] = useState(0);
-  const [isCardFlipped, setIsCardFlipped] = useState(false);
   const [fvaScore, setFvaScore] = useState(0);
   const [fvaAttempts, setFvaAttempts] = useState(0);
   const [fvaCurrentQuestionIndex, setFvaCurrentQuestionIndex] = useState(0);
   const [fvaFeedback, setFvaFeedback] = useState('');
 
+  // EAR TRAINING STATE
   const [earCategory, setEarCategory] = useState('chords');
   const [earScore, setEarScore] = useState(0);
   const [earAttempts, setEarAttempts] = useState(0);
@@ -126,6 +135,7 @@ export default function App() {
   const [shuffledEarOptions, setShuffledEarOptions] = useState([]);
   const [earFeedback, setEarFeedback] = useState('');
 
+  // METRONOME & PITCH
   const [bpm, setBpm] = useState(100);
   const [isMetronomePlaying, setIsMetronomePlaying] = useState(false);
   const [selectedOctave, setSelectedOctave] = useState(4);
@@ -133,6 +143,7 @@ export default function App() {
   const metronomeTimer = useRef(null);
   const audioCtxRef = useRef(null);
 
+  // BUDGET FORM STATE
   const [transDate, setTransDate] = useState(new Date().toISOString().split('T')[0]);
   const [transCategory, setTransCategory] = useState('Dues');
   const [transDesc, setTransDesc] = useState('');
@@ -290,6 +301,99 @@ export default function App() {
     }, 1500);
   };
 
+  // HANDLE SKYWARD CSV ROSTER UPLOAD & PARSING
+  const handleSkywardCsvUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result;
+      const lines = text.split('\n');
+      const newImportedStudents = [];
+
+      lines.forEach((line, index) => {
+        if (index === 0 || !line.trim()) return; // Skip CSV headers
+        const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+
+        if (cols.length >= 2) {
+          const studentId = cols[0] || `SKY-${Math.floor(1000 + Math.random() * 9000)}`;
+          const studentName = cols[1] || 'New Student';
+          const ensemble = cols[2] || 'Symphonic Chorus';
+          const voicePart = cols[3] || 'Soprano';
+
+          newImportedStudents.push({
+            student_id: studentId,
+            name: studentName,
+            ensemble: ensemble,
+            voice_part: voicePart,
+            role: 'student'
+          });
+        }
+      });
+
+      if (newImportedStudents.length > 0) {
+        setStudents(prev => [...prev, ...newImportedStudents]);
+        setImportStatusMsg(`Success! Imported ${newImportedStudents.length} students from Skyward CSV.`);
+      } else {
+        setImportStatusMsg('Error parsing Skyward CSV. Ensure columns match: Student ID, Name, Ensemble, Voice Part.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // FILE UPLOAD HANDLERS FOR SHEET MUSIC PDF & PRACTICE TRACKS
+  const handlePdfUpload = (folderIdx, songId, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const fileUrl = URL.createObjectURL(file);
+    setMusicLibrary(prev => {
+      const copy = [...prev];
+      const song = copy[folderIdx].songs.find(s => s.id === songId);
+      if (song) song.pdfUrl = fileUrl;
+      return copy;
+    });
+  };
+
+  const handleAudioTrackUpload = (folderIdx, songId, partKey, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const fileUrl = URL.createObjectURL(file);
+    setMusicLibrary(prev => {
+      const copy = [...prev];
+      const song = copy[folderIdx].songs.find(s => s.id === songId);
+      if (song) song.audioTracks[partKey] = fileUrl;
+      return copy;
+    });
+  };
+
+  const handleAddNewPiece = (e) => {
+    e.preventDefault();
+    if (!newSongTitle.trim()) return;
+
+    const newSongObj = {
+      id: `song-${Date.now()}`,
+      title: newSongTitle.trim(),
+      pdfUrl: "",
+      audioTracks: { soprano: "", alto: "", tenor: "", bass: "" }
+    };
+
+    setMusicLibrary(prev => {
+      const copy = [...prev];
+      let targetFolder = copy.find(f => f.folder === newSongFolder);
+      if (!targetFolder) {
+        targetFolder = { folder: newSongFolder, songs: [] };
+        copy.push(targetFolder);
+      }
+      targetFolder.songs.push(newSongObj);
+      return copy;
+    });
+
+    setNewSongTitle('');
+  };
+
   const fetchStudents = async () => {
     try {
       const res = await fetch(`${API_BASE}/students`);
@@ -310,6 +414,46 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setStartingBudget(data.starting_budget || 0);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleUpdateStartingBudget = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE}/budget/starting`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ starting_budget: parseFloat(newStartingBudget || 0) })
+      });
+      if (res.ok) {
+        fetchStartingBudget();
+        setNewStartingBudget('');
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleAddTransaction = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE}/budget`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trans_date: transDate,
+          category: transCategory,
+          description: transDesc,
+          trans_type: transType,
+          amount: parseFloat(transAmount || 0),
+          student_id: transStudentId || null
+        })
+      });
+      if (res.ok) {
+        fetchBudget();
+        fetchStudents();
+        setTransDesc('');
+        setTransAmount('');
+        setTransStudentId('');
       }
     } catch (e) { console.error(e); }
   };
@@ -379,6 +523,12 @@ export default function App() {
   const totalIncome = budgetTransactions.filter(t => t.trans_type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpenses = budgetTransactions.filter(t => t.trans_type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const currentBalance = startingBudget + totalIncome - totalExpenses;
+
+  const ensembleList = ['ALL', ...new Set(students.map(s => s.ensemble).filter(Boolean))];
+
+  const filteredStudents = selectedEnsembleFilter === 'ALL'
+    ? students.filter(s => s.role !== 'director')
+    : students.filter(s => s.role !== 'director' && s.ensemble === selectedEnsembleFilter);
 
   if (!currentUser) {
     return (
@@ -463,10 +613,10 @@ export default function App() {
             {[
               { id: 'welcome', label: '🏠 Welcome Hub' },
               { id: 'music', label: '🎼 Sheet Music & Part Tracks' },
-              { id: 'risers', label: '🎶 Arc Riser Map' },
+              { id: 'risers', label: '🎶 Arc Riser Map & Skyward Roster' },
               { id: 'fva', label: '📖 FVA Terms' },
               { id: 'eartraining', label: '👂 Ear Training Studio' },
-              { id: 'budget', label: '💰 Program Finances' }
+              { id: 'budget', label: '💰 Program Finances & Budget' }
             ].map(t => (
               <button
                 key={t.id}
@@ -491,7 +641,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* INSPIRATIONAL QUOTE BANNER */}
               <div className="bg-gradient-to-r from-teal-950 to-slate-900 border border-teal-500/50 p-6 rounded-xl text-center space-y-1">
                 <p className="text-md font-serif italic text-teal-200">"{randomQuote.quote}"</p>
                 <span className="text-xs text-teal-400 font-bold uppercase">— {randomQuote.author}</span>
@@ -511,15 +660,120 @@ export default function App() {
             </div>
           )}
 
-          {directorTab === 'music' && <DigitalSheetMusicTab />}
-
-          {directorTab === 'risers' && (
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-bold text-teal-400">🎶 Stage Curved Arc Riser Layout</h3>
+          {/* MUSIC LIBRARY & UPLOADER (PDF & AUDIO TRACKS) */}
+          {directorTab === 'music' && (
+            <div className="space-y-6">
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-lg font-bold text-teal-400">➕ Add New Song to Music Library</h3>
+                <form onSubmit={handleAddNewPiece} className="flex flex-col md:flex-row gap-3">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Song Title (e.g. Sicut Cervus)"
+                    value={newSongTitle}
+                    onChange={(e) => setNewSongTitle(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 text-xs text-white p-2.5 rounded flex-1"
+                  />
+                  <select
+                    value={newSongFolder}
+                    onChange={(e) => setNewSongFolder(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 text-xs text-white p-2.5 rounded"
+                  >
+                    <option value="🍂 Fall Concert Collection">🍂 Fall Concert Collection</option>
+                    <option value="❄️ Holiday Festival Collection">❄️ Holiday Festival Collection</option>
+                    <option value="🗺️ MPA Assessment List (State Standard)">🗺️ MPA Assessment List (State Standard)</option>
+                  </select>
+                  <button type="submit" className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-4 py-2.5 rounded shadow">
+                    Create Song Entry
+                  </button>
+                </form>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-6 gap-3 pt-4 border-b border-slate-800 pb-6">
+              <div className="space-y-6">
+                {musicLibrary.map((cat, fIdx) => (
+                  <div key={fIdx} className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                    <h4 className="font-bold text-amber-400 text-sm border-b border-slate-800 pb-2">{cat.folder}</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {cat.songs.map((song) => (
+                        <div key={song.id} className="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-3">
+                          <div className="flex justify-between items-center">
+                            <h5 className="font-bold text-white text-xs">{song.title}</h5>
+                            {song.pdfUrl ? (
+                              <a href={song.pdfUrl} target="_blank" rel="noreferrer" className="bg-teal-600 text-white text-[10px] font-bold px-2 py-1 rounded">
+                                📄 View PDF
+                              </a>
+                            ) : (
+                              <label className="bg-slate-800 hover:bg-teal-600 text-slate-300 hover:text-white text-[10px] font-bold px-2 py-1 rounded cursor-pointer border border-slate-700">
+                                📤 Upload PDF
+                                <input type="file" accept="application/pdf" onChange={(e) => handlePdfUpload(fIdx, song.id, e)} className="hidden" />
+                              </label>
+                            )}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] uppercase font-bold text-slate-500 block">Section Practice Audio Tracks</span>
+                            <div className="grid grid-cols-2 gap-2 text-[10px]">
+                              {['soprano', 'alto', 'tenor', 'bass'].map((part) => (
+                                <div key={part} className="bg-slate-900 p-2 rounded border border-slate-800 flex justify-between items-center">
+                                  <span className="capitalize text-slate-300 font-bold">{part}</span>
+                                  {song.audioTracks[part] ? (
+                                    <audio controls src={song.audioTracks[part]} className="w-24 h-6" />
+                                  ) : (
+                                    <label className="bg-slate-950 text-teal-400 border border-slate-700 px-1.5 py-0.5 rounded cursor-pointer">
+                                      + Audio
+                                      <input type="file" accept="audio/*" onChange={(e) => handleAudioTrackUpload(fIdx, song.id, part, e)} className="hidden" />
+                                    </label>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* RISER & SKYWARD ROSTER MANAGER */}
+          {directorTab === 'risers' && (
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-slate-800 pb-6">
+                <div>
+                  <h3 className="text-lg font-bold text-teal-400">🎶 Stage Arc Risers & Spot Placement</h3>
+                  <p className="text-xs text-slate-400">Assign students to physical riser locations by ensemble and voice part.</p>
+                </div>
+
+                {/* SKYWARD CSV ROSTER IMPORT MODULE */}
+                <div className="bg-slate-950 p-4 rounded-xl border border-teal-500/40 space-y-2">
+                  <h4 className="text-xs font-bold text-teal-300 uppercase">📥 Skyward Roster CSV Import</h4>
+                  <p className="text-[11px] text-slate-400">Export roster from Skyward Gradebook as CSV and upload here.</p>
+                  <label className="inline-block bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs px-3 py-1.5 rounded cursor-pointer shadow">
+                    📂 Upload Skyward Roster (.CSV)
+                    <input type="file" accept=".csv" onChange={handleSkywardCsvUpload} className="hidden" />
+                  </label>
+                  {importStatusMsg && <p className="text-[11px] font-bold text-teal-300 pt-1">{importStatusMsg}</p>}
+                </div>
+              </div>
+
+              {/* ENSEMBLE SELECTOR FILTER */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400 uppercase">Filter Ensemble:</span>
+                <select
+                  value={selectedEnsembleFilter}
+                  onChange={(e) => setSelectedEnsembleFilter(e.target.value)}
+                  className="bg-slate-950 border border-slate-700 text-xs text-teal-300 font-bold px-3 py-1.5 rounded"
+                >
+                  {ensembleList.map(ens => (
+                    <option key={ens} value={ens}>{ens}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* ARC RISER OVERVIEW */}
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-3 pt-2">
                 {RISER_SECTIONS.slice(0, 6).map(sec => (
                   <div key={sec.id} className={`p-3 rounded-xl border ${sec.color} ${sec.rotation} transform transition space-y-2`}>
                     <h4 className="font-bold text-[11px] uppercase text-center">{sec.name}</h4>
@@ -534,6 +788,62 @@ export default function App() {
                   </div>
                 ))}
               </div>
+
+              {/* DETAILED SPOT ASSIGNMENT EDITOR */}
+              <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                  <h4 className="text-xs font-bold text-amber-400 uppercase">
+                    Editing Section: {RISER_SECTIONS.find(s => s.id === selectedRiserSection)?.name}
+                  </h4>
+                  <div className="flex gap-1 overflow-x-auto">
+                    {RISER_SECTIONS.map(sec => (
+                      <button
+                        key={sec.id}
+                        onClick={() => setSelectedRiserSection(sec.id)}
+                        className={`px-2.5 py-1 rounded text-[10px] font-bold border ${selectedRiserSection === sec.id ? 'bg-teal-600 text-white' : 'bg-slate-900 text-slate-400 border-slate-800'}`}
+                      >
+                        {sec.id}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {[4, 3, 2, 1].map(rowNum => (
+                    <div key={rowNum} className="flex items-center gap-3">
+                      <span className="text-[10px] uppercase font-mono font-bold text-slate-500 w-16">Row {rowNum}</span>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1">
+                        {[1, 2, 3, 4].map(spotNum => {
+                          const spotKey = `${selectedRiserSection}-R${rowNum}-S${spotNum}`;
+                          const assignedId = riserAssignments[spotKey];
+                          const assignedStudent = students.find(s => s.student_id === assignedId);
+
+                          return (
+                            <div key={spotNum} className="bg-slate-900 p-2 rounded border border-slate-800 space-y-1">
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-slate-500 font-mono">Spot #{spotNum}</span>
+                                {assignedStudent && <span className="text-teal-400 font-bold">{assignedStudent.voice_part}</span>}
+                              </div>
+                              <select
+                                value={assignedId || ''}
+                                onChange={(e) => handleAssignSpot(spotKey, e.target.value)}
+                                className="w-full bg-slate-950 text-xs text-white p-1 rounded border border-slate-700"
+                              >
+                                <option value="">-- Empty Spot --</option>
+                                {filteredStudents.map(s => (
+                                  <option key={s.student_id} value={s.student_id}>
+                                    {s.name} ({s.voice_part || 'Voice'})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -543,7 +853,6 @@ export default function App() {
                 <h3 className="text-lg font-bold text-teal-400">📖 FVA Terms</h3>
               </div>
 
-              {/* 4 OPTION MULTIPLE CHOICE */}
               {(() => {
                 const currentTerm = FVA_TERMS[fvaCurrentQuestionIndex];
                 const incorrects = FVA_TERMS.filter((_, idx) => idx !== fvaCurrentQuestionIndex);
@@ -611,6 +920,125 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {/* RESTORED PROGRAM FINANCES & BUDGET MANAGEMENT */}
+          {directorTab === 'budget' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
+                  <span className="text-xs uppercase font-bold text-slate-400 block">Starting Budget</span>
+                  <div className="text-2xl font-mono font-bold text-amber-400">${startingBudget.toFixed(2)}</div>
+                  <form onSubmit={handleUpdateStartingBudget} className="flex gap-2 pt-1">
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="New starting $"
+                      value={newStartingBudget}
+                      onChange={(e) => setNewStartingBudget(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                    />
+                    <button type="submit" className="bg-amber-600 text-white font-bold text-xs px-2 py-1 rounded">Set</button>
+                  </form>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
+                  <span className="text-xs uppercase font-bold text-emerald-400 block">Total Revenue</span>
+                  <div className="text-2xl font-mono font-bold text-emerald-300">+${totalIncome.toFixed(2)}</div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-1">
+                  <span className="text-xs uppercase font-bold text-rose-400 block">Total Expenses</span>
+                  <div className="text-2xl font-mono font-bold text-rose-300">-${totalExpenses.toFixed(2)}</div>
+                </div>
+
+                <div className="bg-slate-900 border border-teal-500/50 p-4 rounded-xl space-y-1">
+                  <span className="text-xs uppercase font-bold text-teal-400 block">Net Available Balance</span>
+                  <div className="text-2xl font-mono font-bold text-teal-200">${currentBalance.toFixed(2)}</div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-md font-bold text-teal-400">💵 Record Payment or Expense</h3>
+                <form onSubmit={handleAddTransaction} className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Date</label>
+                    <input type="date" required value={transDate} onChange={(e) => setTransDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Type</label>
+                    <select value={transType} onChange={(e) => setTransType(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white">
+                      <option value="income">Income (+)</option>
+                      <option value="expense">Expense (-)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Attach to Student</label>
+                    <select value={transStudentId} onChange={(e) => setTransStudentId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white">
+                      <option value="">(None - General Program)</option>
+                      {students.filter(s => s.role !== 'director').map(s => (
+                        <option key={s.student_id} value={s.student_id}>{s.name} ({s.student_id})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Category</label>
+                    <input type="text" required placeholder="e.g. Fair Share Dues" value={transCategory} onChange={(e) => setTransCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Amount ($)</label>
+                    <input type="number" step="0.01" required placeholder="100.00" value={transAmount} onChange={(e) => setTransAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-xs text-white" />
+                  </div>
+
+                  <div className="flex items-end">
+                    <button type="submit" className="w-full bg-teal-600 hover:bg-teal-500 font-bold text-xs py-2 rounded text-white shadow">Log Entry</button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
+                <h3 className="text-md font-bold text-teal-400">📜 Financial Ledger</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 uppercase">
+                        <th className="py-2 px-2">Date</th>
+                        <th className="py-2 px-2">Type</th>
+                        <th className="py-2 px-2">Category</th>
+                        <th className="py-2 px-2">Attached Student</th>
+                        <th className="py-2 px-2 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {budgetTransactions.map((t) => {
+                        const linkedStudent = students.find(s => s.student_id === t.student_id);
+                        return (
+                          <tr key={t.id}>
+                            <td className="py-2 px-2 font-mono text-slate-400">{t.trans_date}</td>
+                            <td className="py-2 px-2 uppercase font-bold text-[10px]">
+                              <span className={t.trans_type === 'income' ? 'text-emerald-400' : 'text-rose-400'}>
+                                {t.trans_type}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 font-semibold text-white">{t.category}</td>
+                            <td className="py-2 px-2 text-slate-300">
+                              {linkedStudent ? `${linkedStudent.name} (${linkedStudent.student_id})` : '-'}
+                            </td>
+                            <td className={`py-2 px-2 font-mono font-bold text-right ${t.trans_type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {t.trans_type === 'income' ? '+' : '-'}${t.amount.toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         /* STUDENT VIEW */
@@ -631,7 +1059,6 @@ export default function App() {
                 <p className="text-xs text-slate-300">Ensemble: {currentUser.ensemble} • Voice Part: {currentUser.voice_part}</p>
               </div>
 
-              {/* INSPIRATIONAL QUOTE BANNER */}
               <div className="bg-gradient-to-r from-teal-950 to-slate-900 border border-teal-500/50 p-6 rounded-xl text-center space-y-1">
                 <p className="text-md font-serif italic text-teal-200">"{randomQuote.quote}"</p>
                 <span className="text-xs text-teal-400 font-bold uppercase">— {randomQuote.author}</span>
@@ -651,7 +1078,44 @@ export default function App() {
             </div>
           )}
 
-          {studentTab === 'music' && <DigitalSheetMusicTab />}
+          {studentTab === 'music' && (
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6">
+              <h3 className="text-lg font-bold text-teal-400">🎶 Digital Sheet Music Library & Practice Tracks</h3>
+              <div className="space-y-6">
+                {musicLibrary.map((cat, fIdx) => (
+                  <div key={fIdx} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                    <h4 className="font-bold text-amber-400 text-xs border-b border-slate-800 pb-1">{cat.folder}</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {cat.songs.map((song) => (
+                        <div key={song.id} className="bg-slate-900 p-3 rounded border border-slate-800 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <h5 className="font-bold text-white text-xs">{song.title}</h5>
+                            {song.pdfUrl && (
+                              <a href={song.pdfUrl} target="_blank" rel="noreferrer" className="bg-teal-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">
+                                📄 Open PDF
+                              </a>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-1 text-[10px]">
+                            {['soprano', 'alto', 'tenor', 'bass'].map((part) => (
+                              <div key={part} className="bg-slate-950 p-1.5 rounded flex justify-between items-center">
+                                <span className="capitalize text-slate-400 font-bold">{part}</span>
+                                {song.audioTracks[part] ? (
+                                  <audio controls src={song.audioTracks[part]} className="w-20 h-5" />
+                                ) : (
+                                  <span className="text-slate-600">Pending</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {studentTab === 'tools' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -727,42 +1191,3 @@ export default function App() {
     </div>
   );
 }
-
-const DigitalSheetMusicTab = () => (
-  <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-6">
-    <div>
-      <h3 className="text-lg font-bold text-teal-400">🎶 Digital Sheet Music Library & Part Tracks</h3>
-      <p className="text-xs text-slate-400">View performance PDFs and stream section practice tracks.</p>
-    </div>
-
-    <div className="space-y-6">
-      {SHEET_MUSIC_LIBRARY.map((cat, idx) => (
-        <div key={idx} className="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-4">
-          <h4 className="font-bold text-amber-400 text-sm border-b border-slate-800 pb-2">{cat.folder}</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {cat.songs.map((song, sIdx) => (
-              <div key={sIdx} className="bg-slate-900 p-4 rounded-lg border border-slate-800 space-y-3">
-                <div className="flex justify-between items-center">
-                  <h5 className="font-bold text-white text-xs">{song.title}</h5>
-                  <a href={song.pdfUrl} target="_blank" rel="noreferrer" className="bg-teal-600 hover:bg-teal-500 text-white text-[10px] font-bold px-2.5 py-1 rounded">
-                    📄 Open PDF
-                  </a>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-slate-500 block">Section Practice Audio Tracks</span>
-                  <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono">
-                    <button className="bg-slate-950 hover:bg-teal-900/60 border border-slate-800 p-1.5 rounded text-slate-300 text-left">▶ Soprano Track</button>
-                    <button className="bg-slate-950 hover:bg-teal-900/60 border border-slate-800 p-1.5 rounded text-slate-300 text-left">▶ Alto Track</button>
-                    <button className="bg-slate-950 hover:bg-teal-900/60 border border-slate-800 p-1.5 rounded text-slate-300 text-left">▶ Tenor Track</button>
-                    <button className="bg-slate-950 hover:bg-teal-900/60 border border-slate-800 p-1.5 rounded text-slate-300 text-left">▶ Bass Track</button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
