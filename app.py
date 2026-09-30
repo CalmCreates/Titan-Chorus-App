@@ -99,7 +99,7 @@ class FinancialTransaction(db.Model):
 
 # Initialize DB
 with app.app_context():
-    db.create_all()
+    db.create_all()  # Automatically creates any missing missing tables (e.g., NoSuchTableError)
     admin = User.query.filter_by(student_id='ADMIN').first()
     if not admin:
         admin = User(
